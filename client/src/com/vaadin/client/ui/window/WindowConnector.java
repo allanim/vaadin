@@ -17,6 +17,8 @@ package com.vaadin.client.ui.window;
 
 import java.util.logging.Logger;
 
+import com.google.gwt.core.client.Scheduler;
+import com.google.gwt.core.client.Scheduler.ScheduledCommand;
 import com.google.gwt.dom.client.Element;
 import com.google.gwt.dom.client.NativeEvent;
 import com.google.gwt.dom.client.Node;
@@ -38,7 +40,7 @@ import com.vaadin.client.ConnectorHierarchyChangeEvent;
 import com.vaadin.client.LayoutManager;
 import com.vaadin.client.Paintable;
 import com.vaadin.client.UIDL;
-import com.vaadin.client.Util;
+import com.vaadin.client.WidgetUtil;
 import com.vaadin.client.communication.RpcProxy;
 import com.vaadin.client.communication.StateChangeEvent;
 import com.vaadin.client.ui.AbstractSingleComponentContainerConnector;
@@ -247,7 +249,7 @@ public class WindowConnector extends AbstractSingleComponentContainerConnector
             Style childStyle = layoutElement.getStyle();
 
             // IE8 needs some hackery to measure its content correctly
-            Util.forceIE8Redraw(layoutElement);
+            WidgetUtil.forceIE8Redraw(layoutElement);
 
             if (content.isRelativeHeight() && !BrowserInfo.get().isIE9()) {
                 childStyle.setPosition(Position.ABSOLUTE);
@@ -354,10 +356,6 @@ public class WindowConnector extends AbstractSingleComponentContainerConnector
         if (state.modal != window.vaadinModality) {
             window.setVaadinModality(!window.vaadinModality);
         }
-        if (!window.isAttached()) {
-            window.setVisible(false); // hide until possible centering
-            window.show();
-        }
         boolean resizeable = state.resizable
                 && state.windowMode == WindowMode.NORMAL;
         window.setResizable(resizeable);
@@ -378,7 +376,7 @@ public class WindowConnector extends AbstractSingleComponentContainerConnector
 
         window.setAssistivePrefix(state.assistivePrefix);
         window.setAssistivePostfix(state.assistivePostfix);
-        window.setCaption(state.caption, iconURL);
+        window.setCaption(state.caption, iconURL, getState().captionAsHtml);
 
         window.setWaiAriaRole(getState().role);
         window.setAssistiveDescription(state.contentDescription);
@@ -405,6 +403,16 @@ public class WindowConnector extends AbstractSingleComponentContainerConnector
 
         // centered is this is unset on move/resize
         window.centered = state.centered;
+        // Ensure centering before setting visible (#16486)
+        if (window.centered && getState().windowMode != WindowMode.MAXIMIZED) {
+            Scheduler.get().scheduleFinally(new ScheduledCommand() {
+
+                @Override
+                public void execute() {
+                    getWidget().center();
+                }
+            });
+        }
         window.setVisible(true);
 
         // ensure window is not larger than browser window
@@ -440,7 +448,6 @@ public class WindowConnector extends AbstractSingleComponentContainerConnector
             }
         } else if (state.windowMode == WindowMode.MAXIMIZED) {
             window.setPopupPositionNoUpdate(0, 0);
-            window.bringToFront();
         }
     }
 
@@ -469,6 +476,10 @@ public class WindowConnector extends AbstractSingleComponentContainerConnector
                 state.windowMode = WindowMode.MAXIMIZED;
             }
             updateWindowMode();
+
+            VWindow window = getWidget();
+            window.bringToFront();
+
             getRpcProxy(WindowServerRpc.class).windowModeChanged(
                     state.windowMode);
         }

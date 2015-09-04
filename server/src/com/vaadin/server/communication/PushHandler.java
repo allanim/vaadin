@@ -22,13 +22,11 @@ import java.util.Collection;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import org.atmosphere.cpr.AtmosphereHandler;
 import org.atmosphere.cpr.AtmosphereRequest;
 import org.atmosphere.cpr.AtmosphereResource;
 import org.atmosphere.cpr.AtmosphereResource.TRANSPORT;
 import org.atmosphere.cpr.AtmosphereResourceEvent;
-import org.atmosphere.cpr.AtmosphereResourceEventListenerAdapter;
-import org.atmosphere.handler.AbstractReflectorAtmosphereHandler;
+import org.atmosphere.cpr.AtmosphereResourceImpl;
 
 import com.vaadin.server.ErrorEvent;
 import com.vaadin.server.ErrorHandler;
@@ -45,40 +43,19 @@ import com.vaadin.server.VaadinSession;
 import com.vaadin.shared.ApplicationConstants;
 import com.vaadin.shared.communication.PushMode;
 import com.vaadin.ui.UI;
+
 import elemental.json.JsonException;
 
 /**
- * Establishes bidirectional ("push") communication channels
+ * Handles incoming push connections and messages and dispatches them to the
+ * correct {@link UI}/ {@link AtmospherePushConnection}
  * 
  * @author Vaadin Ltd
  * @since 7.1
  */
-public class PushHandler extends AtmosphereResourceEventListenerAdapter {
+public class PushHandler {
 
-    AtmosphereHandler handler = new AbstractReflectorAtmosphereHandler() {
-
-        @Override
-        public void onStateChange(AtmosphereResourceEvent event)
-                throws IOException {
-            super.onStateChange(event);
-            if (event.isCancelled() || event.isResumedOnTimeout()) {
-                disconnect(event);
-            }
-        }
-
-        @Override
-        public void onRequest(AtmosphereResource resource) {
-            AtmosphereRequest req = resource.getRequest();
-
-            if (req.getMethod().equalsIgnoreCase("GET")) {
-                callWithUi(resource, establishCallback, false);
-            } else if (req.getMethod().equalsIgnoreCase("POST")) {
-                callWithUi(resource, receiveCallback,
-                        resource.transport() == TRANSPORT.WEBSOCKET);
-            }
-        }
-
-    };
+    private int longPollingSuspendTimeout = -1;
 
     /**
      * Callback interface used internally to process an event with the
@@ -101,17 +78,21 @@ public class PushHandler extends AtmosphereResourceEventListenerAdapter {
                     "New push connection for resource {0} with transport {1}",
                     new Object[] { resource.uuid(), resource.transport() });
 
-            resource.addEventListener(PushHandler.this);
-
             resource.getResponse().setContentType("text/plain; charset=UTF-8");
 
             VaadinSession session = ui.getSession();
-            if (resource.transport() == TRANSPORT.STREAMING) {
-                // Must ensure that the streaming response contains
+            if (resource.transport() == TRANSPORT.STREAMING
+                    || resource.transport() == TRANSPORT.LONG_POLLING) {
+                // Must ensure that the streaming/long-polling response contains
                 // "Connection: close", otherwise iOS 6 will wait for the
                 // response to this request before sending another request to
                 // the same server (as it will apparently try to reuse the same
-                // connection)
+                // connection).
+
+                // Other browsers might also try to re-use the same
+                // connection for fetching static files after refreshing, which
+                // will cause a failure in loading vaadinPush.js or
+                // vaadinBootstrap.js
                 resource.getResponse().addHeader("Connection", "close");
             }
 
@@ -128,7 +109,7 @@ public class PushHandler extends AtmosphereResourceEventListenerAdapter {
                 return;
             }
 
-            resource.suspend();
+            suspend(resource);
 
             AtmospherePushConnection connection = getConnectionForUI(ui);
             assert (connection != null);
@@ -192,6 +173,21 @@ public class PushHandler extends AtmosphereResourceEventListenerAdapter {
 
     public PushHandler(VaadinServletService service) {
         this.service = service;
+    }
+
+    /**
+     * Suspends the given resource
+     * 
+     * @since
+     * @param resource
+     *            the resource to suspend
+     */
+    protected void suspend(AtmosphereResource resource) {
+        if (resource.transport() == TRANSPORT.LONG_POLLING) {
+            resource.suspend(getLongPollingSuspendTimeout());
+        } else {
+            resource.suspend(-1);
+        }
     }
 
     /**
@@ -323,21 +319,7 @@ public class PushHandler extends AtmosphereResourceEventListenerAdapter {
         }
     }
 
-    @Override
-    public void onDisconnect(AtmosphereResourceEvent event) {
-        // Log event on trace level
-        super.onDisconnect(event);
-        disconnect(event);
-    }
-
-    @Override
-    public void onThrowable(AtmosphereResourceEvent event) {
-        getLogger().log(Level.SEVERE, "Exception in push connection",
-                event.throwable());
-        disconnect(event);
-    }
-
-    private void disconnect(AtmosphereResourceEvent event) {
+    void connectionLost(AtmosphereResourceEvent event) {
         // We don't want to use callWithUi here, as it assumes there's a client
         // request active and does requestStart and requestEnd among other
         // things.
@@ -354,9 +336,13 @@ public class PushHandler extends AtmosphereResourceEventListenerAdapter {
                     "Could not get session. This should never happen", e);
             return;
         } catch (SessionExpiredException e) {
+            // This happens at least if the server is restarted without
+            // preserving the session. After restart the client reconnects, gets
+            // a session expired notification and then closes the connection and
+            // ends up here
             getLogger()
-                    .log(Level.SEVERE,
-                            "Session expired before push was disconnected. This should never happen",
+                    .log(Level.FINER,
+                            "Session expired before push disconnect event was received",
                             e);
             return;
         }
@@ -381,9 +367,9 @@ public class PushHandler extends AtmosphereResourceEventListenerAdapter {
 
                 if (ui == null) {
                     getLogger()
-                            .log(Level.SEVERE,
+                            .log(Level.FINE,
                                     "Could not get UI. This should never happen,"
-                                            + " except when reloading in Firefox -"
+                                            + " except when reloading in Firefox and Chrome -"
                                             + " see http://dev.vaadin.com/ticket/14251.");
                     return;
                 } else {
@@ -423,12 +409,8 @@ public class PushHandler extends AtmosphereResourceEventListenerAdapter {
                                     "Connection unexpectedly closed for resource {0} with transport {1}",
                                     new Object[] { id, resource.transport() });
                 }
-                if (pushConnection.isConnected()) {
-                    // disconnect() assumes the push connection is connected but
-                    // this method can currently be called more than once during
-                    // disconnect, depending on the situation
-                    pushConnection.disconnect();
-                }
+
+                pushConnection.connectionLost();
             }
 
         } catch (final Exception e) {
@@ -472,14 +454,9 @@ public class PushHandler extends AtmosphereResourceEventListenerAdapter {
      */
     private static void sendRefreshAndDisconnect(AtmosphereResource resource)
             throws IOException {
-        AtmospherePushConnection connection = new AtmospherePushConnection(null);
-        connection.connect(resource);
-        try {
-            connection.sendMessage(VaadinService
-                    .createCriticalNotificationJSON(null, null, null, null));
-        } finally {
-            connection.disconnect();
-        }
+        sendNotificationAndDisconnect(resource,
+                VaadinService.createCriticalNotificationJSON(null, null, null,
+                        null));
     }
 
     /**
@@ -490,6 +467,14 @@ public class PushHandler extends AtmosphereResourceEventListenerAdapter {
             AtmosphereResource resource, String notificationJson) {
         // TODO Implemented differently from sendRefreshAndDisconnect
         try {
+            if (resource instanceof AtmosphereResourceImpl
+                    && !((AtmosphereResourceImpl) resource).isInScope()) {
+                // The resource is no longer valid so we should not write
+                // anything to it
+                getLogger()
+                        .fine("sendNotificationAndDisconnect called for resource no longer in scope");
+                return;
+            }
             resource.getResponse().getWriter().write(notificationJson);
             resource.resume();
         } catch (Exception e) {
@@ -500,5 +485,51 @@ public class PushHandler extends AtmosphereResourceEventListenerAdapter {
 
     private static final Logger getLogger() {
         return Logger.getLogger(PushHandler.class.getName());
+    }
+
+    /**
+     * Called when a new push connection is requested to be opened by the client
+     * 
+     * @since 7.5.0
+     * @param resource
+     *            The related atmosphere resources
+     */
+    void onConnect(AtmosphereResource resource) {
+        callWithUi(resource, establishCallback, false);
+    }
+
+    /**
+     * Called when a message is received through the push connection
+     * 
+     * @since 7.5.0
+     * @param resource
+     *            The related atmosphere resources
+     */
+    void onMessage(AtmosphereResource resource) {
+        callWithUi(resource, receiveCallback,
+                resource.transport() == TRANSPORT.WEBSOCKET);
+    }
+
+    /**
+     * Sets the timeout used for suspend calls when using long polling.
+     * 
+     * If you are using a proxy with a defined idle timeout, set the suspend
+     * timeout to a value smaller than the proxy timeout so that the server is
+     * aware of a reconnect taking place.
+     * 
+     * @param suspendTimeout
+     *            the timeout to use for suspended AtmosphereResources
+     */
+    public void setLongPollingSuspendTimeout(int longPollingSuspendTimeout) {
+        this.longPollingSuspendTimeout = longPollingSuspendTimeout;
+    }
+
+    /**
+     * Gets the timeout used for suspend calls when using long polling.
+     * 
+     * @return the timeout to use for suspended AtmosphereResources
+     */
+    public int getLongPollingSuspendTimeout() {
+        return longPollingSuspendTimeout;
     }
 }

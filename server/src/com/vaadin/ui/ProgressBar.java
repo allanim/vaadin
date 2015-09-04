@@ -16,8 +16,12 @@
 
 package com.vaadin.ui;
 
+import org.jsoup.nodes.Element;
+
 import com.vaadin.data.Property;
 import com.vaadin.shared.ui.progressindicator.ProgressBarState;
+import com.vaadin.ui.declarative.DesignAttributeHandler;
+import com.vaadin.ui.declarative.DesignContext;
 
 /**
  * Shows the current progress of a long running task.
@@ -33,11 +37,13 @@ import com.vaadin.shared.ui.progressindicator.ProgressBarState;
 public class ProgressBar extends AbstractField<Float> implements
         Property.Viewer, Property.ValueChangeListener {
 
+    private static final float DEFAULT_VALUE = 0f;
+
     /**
      * Creates a new progress bar initially set to 0% progress.
      */
     public ProgressBar() {
-        this(0);
+        this(DEFAULT_VALUE);
     }
 
     /**
@@ -149,4 +155,32 @@ public class ProgressBar extends AbstractField<Float> implements
         getState().state = newValue;
     }
 
+    @Override
+    public void readDesign(Element design, DesignContext designContext) {
+        super.readDesign(design, designContext);
+        if (design.hasAttr("value") && !design.attr("value").isEmpty()) {
+            setValue(DesignAttributeHandler.readAttribute("value",
+                    design.attributes(), Float.class));
+        }
+    }
+
+    @Override
+    public void writeDesign(Element design, DesignContext designContext) {
+        super.writeDesign(design, designContext);
+        Float defaultValue = ((ProgressBar) designContext
+                .getDefaultInstance(this)).getValue();
+        DesignAttributeHandler.writeAttribute("value", design.attributes(),
+                getValue(), defaultValue, Float.class);
+    }
+
+    @Override
+    public void clear() {
+        setValue(DEFAULT_VALUE);
+    }
+
+    @Override
+    public boolean isEmpty() {
+        return super.isEmpty() || getValue() == DEFAULT_VALUE;
+
+    }
 }

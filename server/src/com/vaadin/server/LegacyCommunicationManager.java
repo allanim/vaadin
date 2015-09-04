@@ -24,6 +24,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -81,6 +82,8 @@ public class LegacyCommunicationManager implements Serializable {
         return session;
     }
 
+    private static final ConcurrentHashMap<Class<? extends SharedState>, JsonValue> referenceDiffStates = new ConcurrentHashMap<Class<? extends SharedState>, JsonValue>();
+
     /**
      * @deprecated As of 7.1. See #11411.
      */
@@ -96,17 +99,10 @@ public class LegacyCommunicationManager implements Serializable {
         if (diffState == null && supportsDiffState) {
             // Use an empty state object as reference for full
             // repaints
-
-            try {
-                SharedState referenceState = stateType.newInstance();
-                EncodeResult encodeResult = JsonCodec.encode(referenceState,
-                        null, stateType, uI.getConnectorTracker());
-                diffState = encodeResult.getEncodedValue();
-            } catch (Exception e) {
-                getLogger()
-                        .log(Level.WARNING,
-                                "Error creating reference object for state of type {0}",
-                                stateType.getName());
+            diffState = referenceDiffStates.get(stateType);
+            if (diffState == null) {
+                diffState = createReferenceDiffStateState(stateType);
+                referenceDiffStates.put(stateType, diffState);
             }
         }
         EncodeResult encodeResult = JsonCodec.encode(state, diffState,
@@ -116,6 +112,21 @@ public class LegacyCommunicationManager implements Serializable {
                     (JsonObject) encodeResult.getEncodedValue());
         }
         return (JsonObject) encodeResult.getDiff();
+    }
+
+    private static JsonValue createReferenceDiffStateState(
+            Class<? extends SharedState> stateType) {
+        try {
+            SharedState referenceState = stateType.newInstance();
+            EncodeResult encodeResult = JsonCodec.encode(referenceState, null,
+                    stateType, null);
+            return encodeResult.getEncodedValue();
+        } catch (Exception e) {
+            getLogger().log(Level.WARNING,
+                    "Error creating reference object for state of type {0}",
+                    stateType.getName());
+            return null;
+        }
     }
 
     /**
@@ -377,17 +388,15 @@ public class LegacyCommunicationManager implements Serializable {
     }
 
     /**
-     * Handles an exception that occurred when processing RPC calls or a file
-     * upload.
+     * Handles an exception related to a connector by invoking the appropriate
+     * error handler.
      * 
      * @deprecated As of 7.1. See #11411.
      * 
-     * @param ui
-     *            The UI where the exception occured
      * @param throwable
-     *            The exception
+     *            the exception to handle
      * @param connector
-     *            The Rpc target
+     *            the connector that the exception is related to
      */
     @Deprecated
     public void handleConnectorRelatedException(ClientConnector connector,

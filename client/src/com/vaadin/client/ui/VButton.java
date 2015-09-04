@@ -23,13 +23,13 @@ import com.google.gwt.dom.client.NativeEvent;
 import com.google.gwt.event.dom.client.ClickEvent;
 import com.google.gwt.event.dom.client.ClickHandler;
 import com.google.gwt.event.dom.client.KeyCodes;
-import com.google.gwt.event.shared.HandlerRegistration;
 import com.google.gwt.user.client.DOM;
 import com.google.gwt.user.client.Event;
 import com.google.gwt.user.client.ui.FocusWidget;
 import com.vaadin.client.ApplicationConnection;
 import com.vaadin.client.BrowserInfo;
 import com.vaadin.client.Util;
+import com.vaadin.client.WidgetUtil;
 
 public class VButton extends FocusWidget implements ClickHandler {
 
@@ -93,8 +93,6 @@ public class VButton extends FocusWidget implements ClickHandler {
     /** For internal use only. May be removed or replaced in the future. */
     public int clickShortcut = 0;
 
-    private HandlerRegistration focusHandlerRegistration;
-    private HandlerRegistration blurHandlerRegistration;
     private long lastClickTime = 0;
 
     public VButton() {
@@ -373,10 +371,10 @@ public class VButton extends FocusWidget implements ClickHandler {
         // Set (x,y) client coordinates to the middle of the button
         int x = getElement().getAbsoluteLeft() - getElement().getScrollLeft()
                 - getElement().getOwnerDocument().getScrollLeft()
-                + Util.getRequiredWidth(getElement()) / 2;
+                + WidgetUtil.getRequiredWidth(getElement()) / 2;
         int y = getElement().getAbsoluteTop() - getElement().getScrollTop()
                 - getElement().getOwnerDocument().getScrollTop()
-                + Util.getRequiredHeight(getElement()) / 2;
+                + WidgetUtil.getRequiredHeight(getElement()) / 2;
         NativeEvent evt = Document.get().createClickEvent(1, 0, 0, x, y, false,
                 false, false, false);
         getElement().dispatchEvent(evt);

@@ -32,7 +32,7 @@ import com.google.gwt.user.client.Command;
 import com.google.gwt.user.client.DOM;
 import com.google.gwt.user.client.Event;
 import com.vaadin.client.BrowserInfo;
-import com.vaadin.client.Util;
+import com.vaadin.client.WidgetUtil;
 import com.vaadin.client.ui.dd.DragImageModifier;
 
 /**
@@ -224,16 +224,16 @@ public class VTextArea extends VTextField implements DragImageModifier {
 
     protected boolean browserSupportsMaxLengthAttribute() {
         BrowserInfo info = BrowserInfo.get();
-        if (info.isFirefox() && info.isBrowserVersionNewerOrEqual(4, 0)) {
+        if (info.isFirefox()) {
             return true;
         }
-        if (info.isSafari() && info.isBrowserVersionNewerOrEqual(5, 0)) {
+        if (info.isSafari()) {
             return true;
         }
-        if (info.isIE() && info.isBrowserVersionNewerOrEqual(10, 0)) {
+        if (info.isIE10() || info.isIE11() || info.isEdge()) {
             return true;
         }
-        if (info.isAndroid() && info.isBrowserVersionNewerOrEqual(2, 3)) {
+        if (info.isAndroid()) {
             return true;
         }
         return false;
@@ -310,7 +310,7 @@ public class VTextArea extends VTextField implements DragImageModifier {
             // and reattach the whole TextArea.
             // Webkit fails to properly reflow the text when enabling wrapping,
             // same workaround
-            Util.detachAttach(getElement());
+            WidgetUtil.detachAttach(getElement());
         }
         this.wordwrap = wordwrap;
     }

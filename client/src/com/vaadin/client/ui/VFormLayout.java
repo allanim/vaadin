@@ -22,7 +22,6 @@ import java.util.List;
 
 import com.google.gwt.aria.client.Roles;
 import com.google.gwt.dom.client.Element;
-import com.google.gwt.dom.client.Style.Overflow;
 import com.google.gwt.event.dom.client.ClickEvent;
 import com.google.gwt.event.dom.client.ClickHandler;
 import com.google.gwt.user.client.DOM;
@@ -30,7 +29,6 @@ import com.google.gwt.user.client.ui.FlexTable;
 import com.google.gwt.user.client.ui.HTML;
 import com.google.gwt.user.client.ui.SimplePanel;
 import com.google.gwt.user.client.ui.Widget;
-import com.vaadin.client.ApplicationConnection;
 import com.vaadin.client.BrowserInfo;
 import com.vaadin.client.ComponentConnector;
 import com.vaadin.client.Focusable;
@@ -78,7 +76,7 @@ public class VFormLayout extends SimplePanel {
         }
 
         if (!enabled) {
-            styles.add(ApplicationConnection.DISABLED_CLASSNAME);
+            styles.add(StyleConstants.DISABLED);
         }
 
         return styles.toArray(new String[styles.size()]);
@@ -224,7 +222,7 @@ public class VFormLayout extends SimplePanel {
 
         private Icon icon;
 
-        private Element captionText;
+        private Element captionContent;
 
         /**
          * 
@@ -242,7 +240,7 @@ public class VFormLayout extends SimplePanel {
 
             if (styles != null) {
                 for (String style : styles) {
-                    if (ApplicationConnection.DISABLED_CLASSNAME.equals(style)) {
+                    if (StyleConstants.DISABLED.equals(style)) {
                         // Add v-disabled also without classname prefix so
                         // generic v-disabled CSS rules work
                         styleName += " " + style;
@@ -275,13 +273,13 @@ public class VFormLayout extends SimplePanel {
             }
 
             if (state.caption != null) {
-                if (captionText == null) {
-                    captionText = DOM.createSpan();
+                if (captionContent == null) {
+                    captionContent = DOM.createSpan();
 
-                    AriaHelper.bindCaption(owner.getWidget(), captionText);
+                    AriaHelper.bindCaption(owner.getWidget(), captionContent);
 
-                    DOM.insertChild(getElement(), captionText, icon == null ? 0
-                            : 1);
+                    DOM.insertChild(getElement(), captionContent,
+                            icon == null ? 0 : 1);
                 }
                 String c = state.caption;
                 if (c == null) {
@@ -289,12 +287,16 @@ public class VFormLayout extends SimplePanel {
                 } else {
                     isEmpty = false;
                 }
-                DOM.setInnerText(captionText, c);
+                if (state.captionAsHtml) {
+                    captionContent.setInnerHTML(c);
+                } else {
+                    captionContent.setInnerText(c);
+                }
             } else {
                 // TODO should span also be removed
             }
 
-            if (state.description != null && captionText != null) {
+            if (state.description != null && captionContent != null) {
                 addStyleDependentName("hasdescription");
             } else {
                 removeStyleDependentName("hasdescription");
@@ -324,22 +326,6 @@ public class VFormLayout extends SimplePanel {
                     requiredFieldIndicator = null;
                 }
             }
-
-            // Workaround for IE weirdness, sometimes returns bad height in some
-            // circumstances when Caption is empty. See #1444
-            // IE7 bugs more often. I wonder what happens when IE8 arrives...
-            // FIXME: This could be unnecessary for IE8+
-            if (BrowserInfo.get().isIE()) {
-                if (isEmpty) {
-                    setHeight("0px");
-                    getElement().getStyle().setOverflow(Overflow.HIDDEN);
-                } else {
-                    setHeight("");
-                    getElement().getStyle().clearOverflow();
-                }
-
-            }
-
         }
 
         /**
@@ -362,7 +348,11 @@ public class VFormLayout extends SimplePanel {
 
         public ErrorFlag(ComponentConnector owner) {
             setStyleName(CLASSNAME);
-            sinkEvents(VTooltip.TOOLTIP_EVENTS);
+
+            if (!BrowserInfo.get().isTouchDevice()) {
+                sinkEvents(VTooltip.TOOLTIP_EVENTS);
+            }
+
             this.owner = owner;
         }
 

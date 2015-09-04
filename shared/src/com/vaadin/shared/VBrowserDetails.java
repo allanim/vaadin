@@ -41,6 +41,8 @@ public class VBrowserDetails implements Serializable {
     private boolean isFirefox = false;
     private boolean isOpera = false;
     private boolean isIE = false;
+    private boolean isEdge = false;
+    private boolean isPhantomJS = false;
 
     private boolean isWindowsPhone;
     private boolean isIPad;
@@ -86,6 +88,17 @@ public class VBrowserDetails implements Serializable {
 
         isSafari = !isChrome && !isIE && userAgent.indexOf("safari") != -1;
         isFirefox = userAgent.indexOf(" firefox/") != -1;
+        isPhantomJS = userAgent.indexOf("phantomjs/") != -1;
+        if (userAgent.indexOf(" edge/") != -1) {
+            isEdge = true;
+            isChrome = false;
+            isOpera = false;
+            isIE = false;
+            isSafari = false;
+            isFirefox = false;
+            isWebKit = false;
+            isGecko = false;
+        }
 
         // chromeframe
         isChromeFrameCapable = userAgent.indexOf("chromeframe") != -1;
@@ -113,6 +126,8 @@ public class VBrowserDetails implements Serializable {
                     tmp = tmp.replaceFirst("([0-9]+\\.[0-9]+).*", "$1");
                     browserEngineVersion = Float.parseFloat(tmp);
                 }
+            } else if (isEdge) {
+                browserEngineVersion = 0;
             }
         } catch (Exception e) {
             // Browser engine version parsing failed
@@ -156,6 +171,9 @@ public class VBrowserDetails implements Serializable {
                     i = userAgent.indexOf("opera/") + 6;
                 }
                 parseVersionString(safeSubstring(userAgent, i, i + 5));
+            } else if (isEdge) {
+                int i = userAgent.indexOf(" edge/") + 6;
+                parseVersionString(safeSubstring(userAgent, i, i + 8));
             }
         } catch (Exception e) {
             // Browser version parsing failed
@@ -368,6 +386,24 @@ public class VBrowserDetails implements Serializable {
      */
     public boolean isIE() {
         return isIE;
+    }
+
+    /**
+     * Tests if the browser is Edge.
+     * 
+     * @return true if it is Edge, false otherwise
+     */
+    public boolean isEdge() {
+        return isEdge;
+    }
+
+    /**
+     * Tests if the browser is PhantomJS.
+     *
+     * @return true if it is PhantomJS, false otherwise
+     */
+    public boolean isPhantomJS() {
+        return isPhantomJS;
     }
 
     /**

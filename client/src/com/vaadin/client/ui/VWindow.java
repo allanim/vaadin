@@ -16,7 +16,7 @@
 
 package com.vaadin.client.ui;
 
-import static com.vaadin.client.Util.isFocusedElementEditable;
+import static com.vaadin.client.WidgetUtil.isFocusedElementEditable;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -44,8 +44,6 @@ import com.google.gwt.event.dom.client.FocusHandler;
 import com.google.gwt.event.dom.client.KeyCodes;
 import com.google.gwt.event.dom.client.KeyDownEvent;
 import com.google.gwt.event.dom.client.KeyDownHandler;
-import com.google.gwt.event.dom.client.KeyUpEvent;
-import com.google.gwt.event.dom.client.KeyUpHandler;
 import com.google.gwt.event.dom.client.ScrollEvent;
 import com.google.gwt.event.dom.client.ScrollHandler;
 import com.google.gwt.event.shared.HandlerRegistration;
@@ -62,7 +60,7 @@ import com.vaadin.client.ComponentConnector;
 import com.vaadin.client.ConnectorMap;
 import com.vaadin.client.Focusable;
 import com.vaadin.client.LayoutManager;
-import com.vaadin.client.Util;
+import com.vaadin.client.WidgetUtil;
 import com.vaadin.client.debug.internal.VDebugWindow;
 import com.vaadin.client.ui.ShortcutActionHandler.ShortcutActionHandlerOwner;
 import com.vaadin.client.ui.aria.AriaHelper;
@@ -79,8 +77,7 @@ import com.vaadin.shared.ui.window.WindowRole;
  * @author Vaadin Ltd
  */
 public class VWindow extends VOverlay implements ShortcutActionHandlerOwner,
-        ScrollHandler, KeyDownHandler, KeyUpHandler, FocusHandler, BlurHandler,
-        Focusable {
+        ScrollHandler, KeyDownHandler, FocusHandler, BlurHandler, Focusable {
 
     private static ArrayList<VWindow> windowOrder = new ArrayList<VWindow>();
 
@@ -221,7 +218,6 @@ public class VWindow extends VOverlay implements ShortcutActionHandlerOwner,
         constructDOM();
         contentPanel.addScrollHandler(this);
         contentPanel.addKeyDownHandler(this);
-        contentPanel.addKeyUpHandler(this);
         contentPanel.addFocusHandler(this);
         contentPanel.addBlurHandler(this);
     }
@@ -392,8 +388,8 @@ public class VWindow extends VOverlay implements ShortcutActionHandlerOwner,
 
         DOM.appendChild(wrapper, topTabStop);
         DOM.appendChild(wrapper, header);
-        DOM.appendChild(wrapper, maximizeRestoreBox);
-        DOM.appendChild(wrapper, closeBox);
+        DOM.appendChild(header, maximizeRestoreBox);
+        DOM.appendChild(header, closeBox);
         DOM.appendChild(header, headerText);
         DOM.appendChild(wrapper, contents);
         DOM.appendChild(wrapper, footer);
@@ -558,6 +554,14 @@ public class VWindow extends VOverlay implements ShortcutActionHandlerOwner,
                 w.bringToFrontSequence = -1;
             }
         }
+        focusTopmostModalWindow();
+    }
+
+    private static void focusTopmostModalWindow() {
+        VWindow topmost = getTopmostWindow();
+        if ((topmost != null) && (topmost.vaadinModality)) {
+            topmost.focus();
+        }
     }
 
     @Override
@@ -581,7 +585,8 @@ public class VWindow extends VOverlay implements ShortcutActionHandlerOwner,
              * ticket #11994 which was changing the size to 110% was replaced
              * with this due to ticket #12943
              */
-            Util.runWebkitOverflowAutoFix(contents.getFirstChildElement());
+            WidgetUtil
+                    .runWebkitOverflowAutoFix(contents.getFirstChildElement());
         }
     }
 
@@ -620,9 +625,13 @@ public class VWindow extends VOverlay implements ShortcutActionHandlerOwner,
 
         this.closable = closable;
         if (closable) {
-            closeBox.getStyle().clearDisplay();
+            DOM.setElementProperty(closeBox, "className", CLASSNAME
+                    + "-closebox");
+
         } else {
-            closeBox.getStyle().setDisplay(Display.NONE);
+            DOM.setElementProperty(closeBox, "className", CLASSNAME
+                    + "-closebox " + CLASSNAME + "-closebox-disabled");
+
         }
 
     }
@@ -685,6 +694,7 @@ public class VWindow extends VOverlay implements ShortcutActionHandlerOwner,
         while (curIndex < windowOrder.size()) {
             windowOrder.get(curIndex).setWindowOrder(curIndex++);
         }
+        focusTopmostModalWindow();
     }
 
     private void fixIE8FocusCaptureIssue() {
@@ -741,11 +751,9 @@ public class VWindow extends VOverlay implements ShortcutActionHandlerOwner,
 
         modalityCurtain.removeFromParent();
 
-        if (BrowserInfo.get().isIE()) {
-            // IE leaks memory in certain cases unless we release the reference
-            // (#9197)
-            modalityCurtain = null;
-        }
+        // IE leaks memory in certain cases unless we release the reference
+        // (#9197)
+        modalityCurtain = null;
     }
 
     /*
@@ -876,11 +884,12 @@ public class VWindow extends VOverlay implements ShortcutActionHandlerOwner,
     }
 
     public void setCaption(String c, String iconURL, boolean asHtml) {
-        String html = c;
-        if (!asHtml) {
-            c = Util.escapeHTML(c);
+        String html;
+        if (asHtml) {
+            html = c == null ? "" : c;
+        } else {
+            html = WidgetUtil.escapeHTML(c);
         }
-
         // Provide information to assistive device users that a sub window was
         // opened
         String prefix = "<span class='"
@@ -1038,7 +1047,7 @@ public class VWindow extends VOverlay implements ShortcutActionHandlerOwner,
     }
 
     private void onResizeEvent(Event event) {
-        if (resizable && Util.isTouchEventOrLeftMouseButton(event)) {
+        if (resizable && WidgetUtil.isTouchEventOrLeftMouseButton(event)) {
             switch (event.getTypeInt()) {
             case Event.ONMOUSEDOWN:
             case Event.ONTOUCHSTART:
@@ -1050,8 +1059,8 @@ public class VWindow extends VOverlay implements ShortcutActionHandlerOwner,
                     resizeBox.getStyle().setVisibility(Visibility.HIDDEN);
                 }
                 resizing = true;
-                startX = Util.getTouchOrMouseClientX(event);
-                startY = Util.getTouchOrMouseClientY(event);
+                startX = WidgetUtil.getTouchOrMouseClientX(event);
+                startY = WidgetUtil.getTouchOrMouseClientY(event);
                 origW = getElement().getOffsetWidth();
                 origH = getElement().getOffsetHeight();
                 DOM.setCapture(getElement());
@@ -1117,8 +1126,8 @@ public class VWindow extends VOverlay implements ShortcutActionHandlerOwner,
             return;
         }
 
-        int w = Util.getTouchOrMouseClientX(event) - startX + origW;
-        int h = Util.getTouchOrMouseClientY(event) - startY + origH;
+        int w = WidgetUtil.getTouchOrMouseClientX(event) - startX + origW;
+        int h = WidgetUtil.getTouchOrMouseClientY(event) - startY + origH;
 
         w = Math.max(w, getMinWidth());
         h = Math.max(h, getMinHeight());
@@ -1181,7 +1190,7 @@ public class VWindow extends VOverlay implements ShortcutActionHandlerOwner,
     }
 
     private void onDragEvent(Event event) {
-        if (!Util.isTouchEventOrLeftMouseButton(event)) {
+        if (!WidgetUtil.isTouchEventOrLeftMouseButton(event)) {
             return;
         }
 
@@ -1216,9 +1225,9 @@ public class VWindow extends VOverlay implements ShortcutActionHandlerOwner,
             centered = false;
             if (cursorInsideBrowserContentArea(event)) {
                 // Only drag while cursor is inside the browser client area
-                final int x = Util.getTouchOrMouseClientX(event) - startX
+                final int x = WidgetUtil.getTouchOrMouseClientX(event) - startX
                         + origX;
-                final int y = Util.getTouchOrMouseClientY(event) - startY
+                final int y = WidgetUtil.getTouchOrMouseClientY(event) - startY
                         + origY;
                 setPopupPosition(x, y);
             }
@@ -1230,8 +1239,8 @@ public class VWindow extends VOverlay implements ShortcutActionHandlerOwner,
         if (draggable) {
             showDraggingCurtain();
             dragging = true;
-            startX = Util.getTouchOrMouseClientX(event);
-            startY = Util.getTouchOrMouseClientY(event);
+            startX = WidgetUtil.getTouchOrMouseClientX(event);
+            startY = WidgetUtil.getTouchOrMouseClientY(event);
             origX = DOM.getAbsoluteLeft(getElement());
             origY = DOM.getAbsoluteTop(getElement());
             DOM.setCapture(getElement());
@@ -1279,7 +1288,7 @@ public class VWindow extends VOverlay implements ShortcutActionHandlerOwner,
             if (!DOM.isOrHasChild(getTopmostWindow().getElement(), target)) {
                 // not within the modal window, but let's see if it's in the
                 // debug window
-                Widget w = Util.findWidget(target, null);
+                Widget w = WidgetUtil.findWidget(target, null);
                 while (w != null) {
                     if (w instanceof VDebugWindow) {
                         return true; // allow debug-window clicks
@@ -1331,13 +1340,6 @@ public class VWindow extends VOverlay implements ShortcutActionHandlerOwner,
     }
 
     @Override
-    public void onKeyUp(KeyUpEvent event) {
-        if (isClosable() && event.getNativeKeyCode() == KeyCodes.KEY_ESCAPE) {
-            onCloseClick();
-        }
-    }
-
-    @Override
     public void onBlur(BlurEvent event) {
         if (client.hasEventListeners(this, EventId.BLUR)) {
             client.updateVariable(id, EventId.BLUR, "", true);
@@ -1353,7 +1355,11 @@ public class VWindow extends VOverlay implements ShortcutActionHandlerOwner,
 
     @Override
     public void focus() {
-        contentPanel.focus();
+        // We don't want to use contentPanel.focus() as that will use a timer in
+        // Chrome/Safari and ultimately run focus events in the wrong order when
+        // opening a modal window and focusing some other component at the same
+        // time
+        contentPanel.getElement().focus();
     }
 
     private int getDecorationHeight() {

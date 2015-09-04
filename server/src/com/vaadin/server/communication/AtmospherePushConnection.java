@@ -26,7 +26,9 @@ import java.io.Writer;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.logging.ConsoleHandler;
 import java.util.logging.Level;
+import java.util.logging.LogRecord;
 import java.util.logging.Logger;
 
 import org.atmosphere.cpr.AtmosphereResource;
@@ -274,13 +276,18 @@ public class AtmospherePushConnection implements PushConnection {
     public void disconnect() {
         assert isConnected();
 
+        if (resource == null) {
+            // Already disconnected. Should not happen but if it does, we don't
+            // want to cause NPEs
+            getLogger()
+                    .fine("AtmospherePushConnection.disconnect() called twice, this should not happen");
+            return;
+        }
         if (resource.isResumed()) {
-            // Calling disconnect may end up invoking it again via
-            // resource.resume and PushHandler.onResume. Bail out here if
-            // the resource is already resumed; this is a bit hacky and should
-            // be implemented in a better way in 7.2.
-            resource = null;
-            state = State.DISCONNECTED;
+            // This can happen for long polling because of
+            // http://dev.vaadin.com/ticket/16919
+            // Once that is fixed, this should never happen
+            connectionLost();
             return;
         }
 
@@ -307,8 +314,23 @@ public class AtmospherePushConnection implements PushConnection {
             getLogger()
                     .log(Level.INFO, "Error when closing push connection", e);
         }
+        connectionLost();
+    }
+
+    /**
+     * Called when the connection to the client has been lost.
+     * 
+     * @since 7.4.1
+     */
+    public void connectionLost() {
         resource = null;
-        state = State.DISCONNECTED;
+        if (state == State.CONNECTED) {
+            // Guard against connectionLost being (incorrectly) called when
+            // state is PUSH_PENDING or RESPONSE_PENDING
+            // (http://dev.vaadin.com/ticket/16919)
+            state = State.DISCONNECTED;
+        }
+
     }
 
     /**
@@ -332,4 +354,32 @@ public class AtmospherePushConnection implements PushConnection {
     private static Logger getLogger() {
         return Logger.getLogger(AtmospherePushConnection.class.getName());
     }
+
+    /**
+     * Internal method used for reconfiguring loggers to show all Atmosphere log
+     * messages in the console.
+     * 
+     * @since 7.6
+     */
+    public static void enableAtmosphereDebugLogging() {
+        Level level = Level.FINEST;
+
+        Logger atmosphereLogger = Logger.getLogger("org.atmosphere");
+        if (atmosphereLogger.getLevel() == level) {
+            // Already enabled
+            return;
+        }
+
+        atmosphereLogger.setLevel(level);
+
+        // Without this logging, we will have a ClassCircularityError
+        LogRecord record = new LogRecord(Level.INFO,
+                "Enabling Atmosphere debug logging");
+        atmosphereLogger.log(record);
+
+        ConsoleHandler ch = new ConsoleHandler();
+        ch.setLevel(Level.ALL);
+        atmosphereLogger.addHandler(ch);
+    }
+
 }

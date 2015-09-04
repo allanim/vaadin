@@ -41,40 +41,38 @@
         <ul>
             <li><a href="#overview">Overview of Vaadin
                     @version@ Release</a></li>
-            <li><a href="#changelog">Change log for Vaadin
+            <li><a href="#changelog">Change Log for Vaadin
                     @version@</a></li>
             <li><a href="#enhancements">Enhancements in Vaadin
                     @version-minor@</a></li>
-            <li><a href="#incompatible">Incompatible or behavior-altering changes in
+            <li><a href="#incompatible">Incompatible or Behavior-altering Changes in
                     @version-minor@</a></li>
-            <li><a href="#knownissues">Known issues in
-                    @version-minor@</a></li>
-            <li><a href="#limitations">Limitations in
-                    @version-minor@</a></li>
+            <li><a href="#knownissues">Known Issues and Limitations</a></li>
             <li><a href="#vaadin">Vaadin Installation</a></li>
             <li><a href="#package">Package Contents</a></li>
-            <li><a href="#migrating">Migrating from Vaadin 6 to
-                    Vaadin 7</a></li>
+            <li><a href="#migrating">Migrating from Vaadin 6</a></li>
             <li><a href="#dependencies">Vaadin @version@
                     dependencies</a></li>
             <li><a href="#upgrading">Upgrading to Vaadin
                     @version-minor@</a></li>
             <li><a href="#supportedversions">Supported
-                    technologies</a></li>
+                    Technologies</a></li>
             <li><a href="#vaadinontheweb">Vaadin on the Web</a></li>
         </ul>
 
         <h2 id="overview">Overview of Vaadin @version@ Release</h2>
 
         <p>
-            Vaadin @version@ is a feature release that includes a
-            number of new features and bug fixes, as listed in the <a
+            Vaadin @version@ is a
+<!--            feature release that includes --> 
+            pre-release for evaluating
+            a number of new features and bug fixes, as listed in the <a
                 href="#enhancements">list of enhancements</a> and <a
                 href="#changelog">change log</a> below.
         </p>
 
         <!-- ================================================================ -->
-        <h3 id="changelog">Change log for Vaadin @version@</h3>
+        <h3 id="changelog">Change Log for Vaadin @version@</h3>
 
         <p>This release includes the following closed issues:</p>
 
@@ -93,60 +91,43 @@
 
         <h2 id="enhancements">Enhancements in Vaadin @version-minor@</h2>
 
-        <p>The @version-minor@ includes many major and minor
+        <p>Vaadin @version-minor@ includes many major and minor
             enhancements. Below is a list of the most notable changes:</p>
 
         <ul>
-            <li>Grid is a new component for showing tabular data. It has been
-                designed from the ground up to eventually replace the Table
-                and TreeTable components.<br />
-                The most notable Grid features in @version-minor@ are:
-                <ul>
-                    <li>Support for multiple rows in the header and footer sections.</li>
-                    <li>Renderer concept for customizing how the data in a given column is represented in the browser.</li>
-                    <li>Support for frozen columns.</li>
-                    <li>Support for inline editing of one row at a time.</li>
-                    <li>Support for components in header and footer cells.</li>
-                    <li>Hardware accelerated, touch optimized scrolling.</li>
-                </ul></li>
-            <li>Declarative layout support for initializing a component hierarchy from an HTML file.</li>
-            <li>Uses GWT 2.7 for improved compilation times when using Super Dev Mode.</li>
-            <li>@Viewport annotation for declaratively defining a mobile viewport definition for a UI.</li>
-            <li>Component captions, TabSheet/Accordion tab captions and Calendar event captions can be configured to be displayed as HTML.</li>
-            <li>Selects use converters when presenting itemids.</li>
-            <li>Improved performance when server response contains no visual changing (e.g. empty polling responses).</li>
-            <li>Unified JSON library for using the same API in both server-side and client-side code.</li>
-            <li>Range validators and converters for additional numerical types.</li>
-            <li>Support for fine grained add/remove item events in in-memory containers.</li>
+            <li>Column reordering using drag and drop in Grid</li>
+            <li>Column hiding in Grid</li>
+            <li>Row details support in Grid</li>
+            <li>JSR 356 WebSocket support has been refactored to improve compatibility with Wildfly and WebLogic</li> 
         </ul>
 
         <p>
-            For enhancements introduced in Vaadin 7.3, see the <a
-                href="http://vaadin.com/download/release/7.3/7.3.0/release-notes.html">Release
-                Notes for Vaadin 7.3.0</a>.
+            For enhancements introduced in Vaadin 7.4, see the <a
+                href="http://vaadin.com/download/release/7.4/7.4.0/release-notes.html">Release
+                Notes for Vaadin 7.4.0</a>.
         </p>
 
-        <h3 id="incompatible">Incompatible or behavior-altering changes in @version-minor@</h3>
+        <h3 id="incompatible">Incompatible or Behavior-altering Changes in @version-minor@</h3>
         <ul>
-            <li>
-                <p>The org.json and com.google.gwt.json libraries have been replaced by elemental.json.</p>
-                <p>JavascriptFunction.call parameter type has been changed to elemental.json.JsonArray, affecting JavaScript.addFunction, AbstractJavaScriptComponent.addFunction and AbstractJavaScriptExtension.addFunction</p>
-                <p>Raw JSON values passed to AbstractJavaScriptComponent.callFunction and AbstractJavaScriptExtension.callFunction should be changed to use elemental.json types.</p>
-            </li>
-            <li>The semantics of empty and required for Field classes has been made more consistent. This mainly affects Checkbox which is now considered to be empty when it is not checked.</li>
-            <li>The previously inconsistent behavior in HTML vs plain text rendering of Calendar event captions has been made consistent.</li>
-            <li>Support for Opera 12 has been dropped. Newer versions based on the Blink rendering engine are still supported.</li>
+            <li>Window close shortcuts have been changed, and ESCAPE is no longer a hard-coded default, but rather a soft one,
+                and can be removed. If the <pre>close-shortcut</pre> attribute of the <pre>v-window</pre> element is present,
+                it must list all close shortcuts, including ESCAPE, separated by whitespace. Existing, unchanged code should
+                behave as before. See ticket <a href="https://dev.vaadin.com/ticket/17383">#17383</a> for more information 
+                on the reasoning behind the change.</li>
+            <li>The push path has been changed from /PUSH/ to /PUSH to be compatible with JSR 356.</li>
+            <li>Widgetset files and other pre-compressed resources are sent as gzip to compatible browsers.
+                This may interfere with custom response compression solutions that do not respect the Content-Encoding response header.</li>
+            <li>Unused methods related to the "out of sync" message have been removed from SystemMessages class.</li>
+            <li>All notifications use the WAI-ARIA alert role to be compatible with Jaws</li>
+            <li>Grid SelectionModels are now Extensions. This update removes all selection related variables and API from 
+            GridConnector, GridState, GridServerRpc and GridClientRpc</li>
         </ul>
-        <h3 id="knownissues">Known issues</h3>
+        <h3 id="knownissues">Known Issues and Limitations</h3>
         <ul>
             <li>Drag'n'drop in a Table doesn't work on touch devices running
                 Internet Explorer (Windows Phone, Surface)
                 (<a href="http://dev.vaadin.com/ticket/13737">#13737</a>)
             </li>
-        </ul>
-
-        <h3 id="limitations">Limitations</h3>
-        <ul>
             <li><p>It is currently not possible to specify <tt>font-size</tt>
                 as <tt>em</tt> or <tt>%</tt>, or layout component sizes
                 with <tt>em</tt> (<a
@@ -155,17 +136,29 @@
                 because it results in fractional component sizes in many cases, which 
                 might cause unwanted 1px gaps between components.</p>
             </li>
-            <li>Push is currently not supported in portals (See <a
-                href="http://dev.vaadin.com/ticket/11493">#11493</a>)
+            <li>Up-to-date information about configuration needed for push and compatibility issues are available in
+            <a href="https://vaadin.com/wiki/-/wiki/Main/Configuring+push+for+your+environment">this wiki page.</a>
+            <br />
+            The most prominent limitations are:
+            <ul>
+	            <li>HTTP proxies can prevent push requests from working
+	            properly. To mitigate the issues, avoid using streaming
+	            and configure your proxy so it allows response headers
+	            to pass through before the whole response is received. 
+	            <a href="http://dev.vaadin.com/ticket/17075">#17075</a>
+	            should make long-polling work seamlessly with all proxies.
+	            </li>
+	            <li>HTTP session can not be invalidated while using
+	                push over websockets on Tomcat 7 (<a href="http://dev.vaadin.com/ticket/11721">#11721</a>)
+	            </li>
+	            <li>Cookies are not available while using websockets (<a
+	                href="http://dev.vaadin.com/ticket/11808">#11808</a>)
+	            </li>
+	            <li>Push is currently not supported in portals (See <a
+	                href="http://dev.vaadin.com/ticket/11493">#11493</a>)
+	            </li>
+            </ul>
             </li>
-            <li>HTTP session can not be invalidated while using
-                push over websockets on Tomcat 7 (<a href="http://dev.vaadin.com/ticket/11721">#11721</a>)
-            </li>
-            <li>Cookies are not available while using websockets (<a
-                href="http://dev.vaadin.com/ticket/11808">#11808</a>)
-            </li>
-            <li>Not all proxies are compatible with websockets or streaming.
-                Use long polling to avoid these problems.</li>
         </ul>
 
         <h2 id="vaadin">Vaadin Installation</h2>
@@ -329,7 +322,7 @@
             directory of the web application that uses validation.
         </p>
 
-        <h2 id="upgrading">Upgrading from Vaadin 7.1 to Vaadin @version-minor@</h2>
+        <h2 id="upgrading">Upgrading to Vaadin @version-minor@</h2>
 
         <p>When upgrading from an earlier Vaadin version, you must:
         </p>
@@ -484,7 +477,7 @@
             <li>Oracle WebLogic Server 10.3-12</li>
             <li>IBM WebSphere Application Server 7-8</li>
             <li>JBoss Application Server 4-7</li>
-            <li>Wildfly 8</li>
+            <li>Wildfly 8-9</li>
             <li>Jetty 5-9</li>
             <li>Glassfish 2-4</li>
         </ul>
@@ -511,12 +504,12 @@
         </p>
 
         <ul>
-            <li>Mozilla Firefox 18-34</li>
-            <li>Mozilla Firefox 17 ESR, 24 ESR, 31 ESR</li>
+            <li>Mozilla Firefox 18-38</li>
+            <li>Mozilla Firefox 17 ESR, 24 ESR, 31 ESR, 38 ESR</li>
             <li>Internet Explorer 8-11</li>
             <li>Safari 6-8</li>
-            <li>Opera 16-27</li>
-            <li>Google Chrome 23-39</li>
+            <li>Opera 16-29</li>
+            <li>Google Chrome 23-42</li>
         </ul>
 
         <p>

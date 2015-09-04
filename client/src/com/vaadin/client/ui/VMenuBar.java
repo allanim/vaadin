@@ -50,6 +50,7 @@ import com.vaadin.client.LayoutManager;
 import com.vaadin.client.TooltipInfo;
 import com.vaadin.client.UIDL;
 import com.vaadin.client.Util;
+import com.vaadin.client.WidgetUtil;
 import com.vaadin.shared.ui.menubar.MenuBarConstants;
 
 public class VMenuBar extends SimpleFocusablePanel implements
@@ -234,7 +235,7 @@ public class VMenuBar extends SimpleFocusablePanel implements
             }
             String itemText = item.getStringAttribute("text");
             if (!htmlContentAllowed) {
-                itemText = Util.escapeHTML(itemText);
+                itemText = WidgetUtil.escapeHTML(itemText);
             }
             itemHTML.append(itemText);
             itemHTML.append("</span>");
@@ -658,7 +659,8 @@ public class VMenuBar extends SimpleFocusablePanel implements
 
                 // Make room for the scroll bar by adjusting the width of the
                 // popup
-                style.setWidth(contentWidth + Util.getNativeScrollbarSize(),
+                style.setWidth(
+                        contentWidth + WidgetUtil.getNativeScrollbarSize(),
                         Unit.PX);
                 popup.positionOrSizeUpdated();
             }
@@ -910,10 +912,22 @@ public class VMenuBar extends SimpleFocusablePanel implements
                         SUBMENU_CLASSNAME_PREFIX, "");
             }
 
+            String currentStyles = super.getStyleName();
+            List<String> customStyles = new ArrayList<String>();
+            for (String style : currentStyles.split(" ")) {
+                if (!style.isEmpty() && !style.startsWith(primaryStyleName)) {
+                    customStyles.add(style);
+                }
+            }
+
             if (isSeparator) {
                 super.setStyleName(primaryStyleName + "-separator");
             } else {
                 super.setStyleName(primaryStyleName + "-menuitem");
+            }
+
+            for (String customStyle : customStyles) {
+                super.addStyleName(customStyle);
             }
 
             if (styleName != null) {
@@ -983,7 +997,7 @@ public class VMenuBar extends SimpleFocusablePanel implements
 
             // Sink the onload event for any icons. The onload
             // events are handled by the parent VMenuBar.
-            Util.sinkOnloadForImages(getElement());
+            WidgetUtil.sinkOnloadForImages(getElement());
         }
 
         @Override
@@ -993,7 +1007,7 @@ public class VMenuBar extends SimpleFocusablePanel implements
 
         @Override
         public void setText(String text) {
-            setHTML(Util.escapeHTML(text));
+            setHTML(WidgetUtil.escapeHTML(text));
         }
 
         public void setEnabled(boolean enabled) {
@@ -1495,13 +1509,23 @@ public class VMenuBar extends SimpleFocusablePanel implements
                 // selection there
                 openMenuAndFocusFirstIfPossible(getSelected());
             } else {
-                Command command = getSelected().getCommand();
-                if (command != null) {
-                    command.execute();
-                }
+                final Command command = getSelected().getCommand();
 
                 setSelected(null);
                 hideParents(true);
+
+                // #17076 keyboard selected menuitem without children: do
+                // not leave menu to visible ("hover open") mode
+                menuVisible = false;
+
+                Scheduler.get().scheduleDeferred(new ScheduledCommand() {
+                    @Override
+                    public void execute() {
+                        if (command != null) {
+                            command.execute();
+                        }
+                    }
+                });
             }
         }
 

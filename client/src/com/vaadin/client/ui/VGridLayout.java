@@ -143,8 +143,10 @@ public class VGridLayout extends ComplexPanel {
         if (!isUndefinedHeight()) {
             int usedSpace = calcRowUsedSpace();
             int[] actualExpandRatio = calcRowExpandRatio();
-            int availableSpace = LayoutManager.get(client).getInnerHeight(
-                    getElement());
+            // Round down to avoid problems with fractions (100.1px available ->
+            // can use 100, not 101)
+            int availableSpace = (int) LayoutManager.get(client)
+                    .getInnerHeightDouble(getElement());
             int excessSpace = availableSpace - usedSpace;
             int distributed = 0;
             if (excessSpace > 0) {
@@ -223,8 +225,10 @@ public class VGridLayout extends ComplexPanel {
         if (!isUndefinedWidth()) {
             int usedSpace = calcColumnUsedSpace();
             int[] actualExpandRatio = calcColumnExpandRatio();
-            int availableSpace = LayoutManager.get(client).getInnerWidth(
-                    getElement());
+            // Round down to avoid problems with fractions (100.1px available ->
+            // can use 100, not 101)
+            int availableSpace = (int) LayoutManager.get(client)
+                    .getInnerWidthDouble(getElement());
             int excessSpace = availableSpace - usedSpace;
             int distributed = 0;
             if (excessSpace > 0) {
@@ -730,7 +734,8 @@ public class VGridLayout extends ComplexPanel {
             setAlignment(new AlignmentInfo(childComponentData.alignment));
         }
 
-        public void setComponent(ComponentConnector component) {
+        public void setComponent(ComponentConnector component,
+                List<ComponentConnector> ordering) {
             if (slot == null || slot.getChild() != component) {
                 slot = new ComponentConnectorLayoutSlot(CLASSNAME, component,
                         getConnector());
@@ -739,7 +744,20 @@ public class VGridLayout extends ComplexPanel {
                     slot.getWrapperElement().getStyle().setWidth(100, Unit.PCT);
                 }
                 Element slotWrapper = slot.getWrapperElement();
-                getElement().appendChild(slotWrapper);
+                int childIndex = ordering.indexOf(component);
+                // insert new slot by proper index
+                // do not break default focus order
+                com.google.gwt.user.client.Element element = getElement();
+                if (childIndex == ordering.size()) {
+                    element.appendChild(slotWrapper);
+                } else if (childIndex == 0) {
+                    element.insertAfter(slotWrapper, spacingMeasureElement);
+                } else {
+                    // here we use childIndex - 1 + 1(spacingMeasureElement)
+                    Element previousSlot = (Element) element
+                            .getChild(childIndex);
+                    element.insertAfter(slotWrapper, previousSlot);
+                }
 
                 Widget widget = component.getWidget();
                 insert(widget, slotWrapper, getWidgetCount(), false);
@@ -889,6 +907,10 @@ public class VGridLayout extends ComplexPanel {
                 cell.slot.setCaption(null);
                 cell.slot.getWrapperElement().removeFromParent();
                 cell.slot = null;
+                Style style = w.getElement().getStyle();
+                style.clearTop();
+                style.clearLeft();
+                style.clearPosition();
 
                 if (cells.length < cell.col && cells.length != 0
                         && cells[0].length < cell.row

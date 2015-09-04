@@ -17,12 +17,14 @@ package com.vaadin.util;
 
 import static org.junit.Assert.assertNull;
 
+import java.lang.ref.WeakReference;
 import java.lang.reflect.Field;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.easymock.EasyMock;
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Test;
 
 import com.vaadin.server.VaadinRequest;
@@ -31,6 +33,12 @@ import com.vaadin.server.VaadinSession;
 import com.vaadin.ui.UI;
 
 public class CurrentInstanceTest {
+
+    @Before
+    public void clearExistingThreadLocals() {
+        // Ensure no previous test left some thread locals hanging
+        CurrentInstance.clearAll();
+    }
 
     @Test
     public void testInitiallyCleared() throws Exception {
@@ -49,6 +57,8 @@ public class CurrentInstanceTest {
 
     @Test
     public void testClearedAfterRemoveInheritable() throws Exception {
+        CurrentInstance.clearAll();
+
         CurrentInstance.setInheritable(CurrentInstanceTest.class, this);
         Assert.assertEquals(this,
                 CurrentInstance.get(CurrentInstanceTest.class));
@@ -190,5 +200,49 @@ public class CurrentInstanceTest {
         CurrentInstance.restoreInstances(old);
         assertNull(CurrentInstance.get(VaadinSession.class));
         assertNull(CurrentInstance.get(VaadinService.class));
+    }
+
+    @Test
+    public void testRestoreWithGarbageCollectedValue()
+            throws InterruptedException {
+        VaadinSession session1 = new VaadinSession(null) {
+            @Override
+            public String toString() {
+                return "First session";
+            }
+        };
+        VaadinSession session2 = new VaadinSession(null) {
+            @Override
+            public String toString() {
+                return "Second session";
+            }
+        };
+
+        VaadinSession.setCurrent(session1);
+        Map<Class<?>, CurrentInstance> previous = CurrentInstance
+                .setCurrent(session2);
+
+        // Use weak ref to verify object is collected
+        WeakReference<VaadinSession> ref = new WeakReference<VaadinSession>(
+                session1);
+
+        session1 = null;
+        waitUntilGarbageCollected(ref);
+
+        CurrentInstance.restoreInstances(previous);
+
+        Assert.assertNull(VaadinSession.getCurrent());
+    }
+
+    private static void waitUntilGarbageCollected(WeakReference<?> ref)
+            throws InterruptedException {
+        for (int i = 0; i < 50; i++) {
+            System.gc();
+            if (ref.get() == null) {
+                return;
+            }
+            Thread.sleep(100);
+        }
+        Assert.fail("Value was not garbage collected.");
     }
 }

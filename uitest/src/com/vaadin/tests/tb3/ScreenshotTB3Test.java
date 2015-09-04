@@ -16,27 +16,28 @@
 
 package com.vaadin.tests.tb3;
 
-import java.awt.image.BufferedImage;
-import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileFilter;
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
-import javax.imageio.ImageIO;
-
+import org.apache.commons.io.FileUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.rules.TestRule;
 import org.junit.rules.TestWatcher;
-import org.openqa.selenium.OutputType;
-import org.openqa.selenium.TakesScreenshot;
+import org.junit.runner.Description;
+import org.openqa.selenium.WebDriver;
+import org.openqa.selenium.WebElement;
 import org.openqa.selenium.remote.DesiredCapabilities;
 
 import com.vaadin.testbench.Parameters;
-import com.vaadin.testbench.commands.TestBenchCommands;
+import com.vaadin.testbench.ScreenshotOnFailureRule;
+import com.vaadin.testbench.parallel.BrowserUtil;
+import com.vaadin.testbench.screenshot.ImageFileUtil;
 
 /**
  * Base class which provides functionality for tests which use the automatic
@@ -45,6 +46,29 @@ import com.vaadin.testbench.commands.TestBenchCommands;
  * @author Vaadin Ltd
  */
 public abstract class ScreenshotTB3Test extends AbstractTB3Test {
+
+    @Rule
+    public ScreenshotOnFailureRule screenshotOnFailure = new ScreenshotOnFailureRule(
+            this, true) {
+
+        @Override
+        protected void failed(Throwable throwable, Description description) {
+            super.failed(throwable, description);
+            closeApplication();
+        }
+
+        @Override
+        protected void succeeded(Description description) {
+            super.succeeded(description);
+            closeApplication();
+        }
+
+        @Override
+        protected File getErrorScreenshotFile(Description description) {
+            return ImageFileUtil
+                    .getErrorScreenshotFile(getScreenshotFailureName());
+        };
+    };
 
     private String screenshotBaseName;
 
@@ -97,6 +121,11 @@ public abstract class ScreenshotTB3Test extends AbstractTB3Test {
      * @throws IOException
      */
     protected void compareScreen(String identifier) throws IOException {
+        compareScreen(null, identifier);
+    }
+
+    protected void compareScreen(WebElement element, String identifier)
+            throws IOException {
         if (identifier == null || identifier.isEmpty()) {
             throw new IllegalArgumentException("Empty identifier not supported");
         }
@@ -107,7 +136,17 @@ public abstract class ScreenshotTB3Test extends AbstractTB3Test {
         List<File> failedReferenceFiles = new ArrayList<File>();
 
         for (File referenceFile : referenceFiles) {
-            if (testBench(driver).compareScreen(referenceFile)) {
+            boolean match = false;
+            if (element == null) {
+                // Full screen
+                match = testBench(driver).compareScreen(referenceFile);
+            } else {
+                // Only the element
+                match = customTestBench(driver).compareScreen(element,
+                        referenceFile,
+                        BrowserUtil.isIE8(getDesiredCapabilities()));
+            }
+            if (match) {
                 // There might be failure files because of retries in TestBench.
                 deleteFailureFiles(getErrorFileFromReference(referenceFile));
                 break;
@@ -151,6 +190,37 @@ public abstract class ScreenshotTB3Test extends AbstractTB3Test {
                 deleteFailureFiles(failurePng);
             }
         }
+        if (referenceToKeep != null) {
+            File errorPng = getErrorFileFromReference(referenceToKeep);
+            enableAutoswitch(new File(errorPng.getParentFile(),
+                    errorPng.getName() + ".html"));
+        }
+    }
+
+    private CustomTestBenchCommandExecutor customTestBench = null;
+
+    private CustomTestBenchCommandExecutor customTestBench(WebDriver driver) {
+        if (customTestBench == null) {
+            customTestBench = new CustomTestBenchCommandExecutor(driver);
+        }
+
+        return customTestBench;
+    }
+
+    private void enableAutoswitch(File htmlFile) throws FileNotFoundException,
+            IOException {
+        if (htmlFile == null || !htmlFile.exists()) {
+            return;
+        }
+
+        String html = FileUtils.readFileToString(htmlFile);
+
+        html = html.replace("body onclick=\"",
+                "body onclick=\"clearInterval(autoSwitch);");
+        html = html.replace("</script>",
+                ";autoSwitch=setInterval(switchImage,500);</script>");
+
+        FileUtils.writeStringToFile(htmlFile, html);
     }
 
     private void deleteFailureFiles(File failurePng) {
@@ -297,45 +367,10 @@ public abstract class ScreenshotTB3Test extends AbstractTB3Test {
      */
     @After
     public void checkCompareFailures() throws IOException {
-        if (!screenshotFailures.isEmpty()) {
+        if (screenshotFailures != null && !screenshotFailures.isEmpty()) {
             throw new IOException(
                     "The following screenshots did not match the reference: "
                             + screenshotFailures.toString());
-        }
-
-    }
-
-    /*
-     * (non-Javadoc)
-     * 
-     * @see
-     * com.vaadin.tests.tb3.AbstractTB3Test#onUncaughtException(java.lang.Throwable
-     * )
-     */
-    @Override
-    public void onUncaughtException(Throwable cause) {
-        super.onUncaughtException(cause);
-        // Grab a "failure" screenshot and store in the errors folder for later
-        // analysis
-        try {
-            TestBenchCommands testBench = testBench();
-            if (testBench != null) {
-                testBench.disableWaitForVaadin();
-            }
-        } catch (Throwable t) {
-            t.printStackTrace();
-        }
-        try {
-            if (driver != null) {
-                BufferedImage screenshotImage = ImageIO
-                        .read(new ByteArrayInputStream(
-                                ((TakesScreenshot) driver)
-                                        .getScreenshotAs(OutputType.BYTES)));
-                ImageIO.write(screenshotImage, "png", new File(
-                        getScreenshotFailureName()));
-            }
-        } catch (Throwable t) {
-            t.printStackTrace();
         }
 
     }
@@ -346,7 +381,9 @@ public abstract class ScreenshotTB3Test extends AbstractTB3Test {
      *         fails
      */
     private String getScreenshotFailureName() {
-        return getScreenshotErrorBaseName() + "-failure.png";
+        return getScreenshotBaseName() + "_"
+                + getUniqueIdentifier(getDesiredCapabilities())
+                + "-failure.png";
     }
 
     /**
@@ -383,10 +420,9 @@ public abstract class ScreenshotTB3Test extends AbstractTB3Test {
             Integer versionOverride) {
         String uniqueBrowserIdentifier;
         if (versionOverride == null) {
-            uniqueBrowserIdentifier = BrowserUtil
-                    .getUniqueIdentifier(getDesiredCapabilities());
+            uniqueBrowserIdentifier = getUniqueIdentifier(getDesiredCapabilities());
         } else {
-            uniqueBrowserIdentifier = BrowserUtil.getUniqueIdentifier(
+            uniqueBrowserIdentifier = getUniqueIdentifier(
                     getDesiredCapabilities(), "" + versionOverride);
         }
 
@@ -394,6 +430,40 @@ public abstract class ScreenshotTB3Test extends AbstractTB3Test {
         return getScreenshotReferenceDirectory() + File.separator
                 + getScreenshotBaseName() + "_" + uniqueBrowserIdentifier + "_"
                 + identifier + ".png";
+    }
+
+    /**
+     * Returns a string which uniquely (enough) identifies this browser. Used
+     * mainly in screenshot names.
+     * 
+     * @param capabilities
+     * @param versionOverride
+     * 
+     * @return a unique string for each browser
+     */
+    private String getUniqueIdentifier(DesiredCapabilities capabilities,
+            String versionOverride) {
+        return getUniqueIdentifier(BrowserUtil.getPlatform(capabilities),
+                BrowserUtil.getBrowserIdentifier(capabilities), versionOverride);
+    }
+
+    /**
+     * Returns a string which uniquely (enough) identifies this browser. Used
+     * mainly in screenshot names.
+     * 
+     * @param capabilities
+     * 
+     * @return a unique string for each browser
+     */
+    private String getUniqueIdentifier(DesiredCapabilities capabilities) {
+        return getUniqueIdentifier(BrowserUtil.getPlatform(capabilities),
+                BrowserUtil.getBrowserIdentifier(capabilities),
+                capabilities.getVersion());
+    }
+
+    private String getUniqueIdentifier(String platform, String browser,
+            String version) {
+        return platform + "_" + browser + "_" + version;
     }
 
     /**

@@ -16,6 +16,8 @@
 
 package com.vaadin.client;
 
+import java.util.logging.Logger;
+
 import com.google.gwt.aria.client.Roles;
 import com.google.gwt.dom.client.Element;
 import com.google.gwt.dom.client.Style.Unit;
@@ -148,7 +150,7 @@ public class VCaption extends HTML {
             }
         }
         if (!owner.isEnabled()) {
-            style += " " + ApplicationConnection.DISABLED_CLASSNAME;
+            style += " " + StyleConstants.DISABLED;
         }
         setStyleName(style);
 
@@ -328,7 +330,7 @@ public class VCaption extends HTML {
 
         String style = VCaption.CLASSNAME;
         if (disabled) {
-            style += " " + ApplicationConnection.DISABLED_CLASSNAME;
+            style += " " + StyleConstants.DISABLED;
         }
         setStyleName(style);
         if (hasDescription) {
@@ -445,7 +447,9 @@ public class VCaption extends HTML {
             if (owner != null) {
                 Util.notifyParentOfSizeChange(owner.getWidget(), true);
             } else {
-                VConsole.log("Warning: Icon load event was not propagated because VCaption owner is unknown.");
+                getLogger()
+                        .warning(
+                                "Warning: Icon load event was not propagated because VCaption owner is unknown.");
             }
         }
     }
@@ -510,17 +514,17 @@ public class VCaption extends HTML {
         int width = 0;
 
         if (icon != null) {
-            width += Util.getRequiredWidth(icon.getElement());
+            width += WidgetUtil.getRequiredWidth(icon.getElement());
         }
 
         if (captionText != null) {
-            width += Util.getRequiredWidth(captionText);
+            width += WidgetUtil.getRequiredWidth(captionText);
         }
         if (requiredFieldIndicator != null) {
-            width += Util.getRequiredWidth(requiredFieldIndicator);
+            width += WidgetUtil.getRequiredWidth(requiredFieldIndicator);
         }
         if (errorIndicatorElement != null) {
-            width += Util.getRequiredWidth(errorIndicatorElement);
+            width += WidgetUtil.getRequiredWidth(errorIndicatorElement);
         }
 
         return width;
@@ -531,7 +535,7 @@ public class VCaption extends HTML {
         int width = 0;
 
         if (icon != null) {
-            width += Util.getRequiredWidth(icon.getElement());
+            width += WidgetUtil.getRequiredWidth(icon.getElement());
         }
         if (captionText != null) {
             int textWidth = captionText.getScrollWidth();
@@ -540,7 +544,7 @@ public class VCaption extends HTML {
                  * In Firefox3 the caption might require more space than the
                  * scrollWidth returns as scrollWidth is rounded down.
                  */
-                int requiredWidth = Util.getRequiredWidth(captionText);
+                int requiredWidth = WidgetUtil.getRequiredWidth(captionText);
                 if (requiredWidth > textWidth) {
                     textWidth = requiredWidth;
                 }
@@ -549,10 +553,10 @@ public class VCaption extends HTML {
             width += textWidth;
         }
         if (requiredFieldIndicator != null) {
-            width += Util.getRequiredWidth(requiredFieldIndicator);
+            width += WidgetUtil.getRequiredWidth(requiredFieldIndicator);
         }
         if (errorIndicatorElement != null) {
-            width += Util.getRequiredWidth(errorIndicatorElement);
+            width += WidgetUtil.getRequiredWidth(errorIndicatorElement);
         }
 
         return width;
@@ -564,26 +568,26 @@ public class VCaption extends HTML {
         int h;
 
         if (icon != null) {
-            h = Util.getRequiredHeight(icon.getElement());
+            h = WidgetUtil.getRequiredHeight(icon.getElement());
             if (h > height) {
                 height = h;
             }
         }
 
         if (captionText != null) {
-            h = Util.getRequiredHeight(captionText);
+            h = WidgetUtil.getRequiredHeight(captionText);
             if (h > height) {
                 height = h;
             }
         }
         if (requiredFieldIndicator != null) {
-            h = Util.getRequiredHeight(requiredFieldIndicator);
+            h = WidgetUtil.getRequiredHeight(requiredFieldIndicator);
             if (h > height) {
                 height = h;
             }
         }
         if (errorIndicatorElement != null) {
-            h = Util.getRequiredHeight(errorIndicatorElement);
+            h = WidgetUtil.getRequiredHeight(errorIndicatorElement);
             if (h > height) {
                 height = h;
             }
@@ -619,11 +623,13 @@ public class VCaption extends HTML {
 
             // DOM.setStyleAttribute(getElement(), "width", maxWidth + "px");
             if (requiredFieldIndicator != null) {
-                availableWidth -= Util.getRequiredWidth(requiredFieldIndicator);
+                availableWidth -= WidgetUtil
+                        .getRequiredWidth(requiredFieldIndicator);
             }
 
             if (errorIndicatorElement != null) {
-                availableWidth -= Util.getRequiredWidth(errorIndicatorElement);
+                availableWidth -= WidgetUtil
+                        .getRequiredWidth(errorIndicatorElement);
             }
 
             if (availableWidth < 0) {
@@ -631,8 +637,8 @@ public class VCaption extends HTML {
             }
 
             if (icon != null) {
-                int iconRequiredWidth = Util
-                        .getRequiredWidth(icon.getElement());
+                int iconRequiredWidth = WidgetUtil.getRequiredWidth(icon
+                        .getElement());
                 if (availableWidth > iconRequiredWidth) {
                     availableWidth -= iconRequiredWidth;
                 } else {
@@ -642,7 +648,7 @@ public class VCaption extends HTML {
                 }
             }
             if (captionText != null) {
-                int captionWidth = Util.getRequiredWidth(captionText);
+                int captionWidth = WidgetUtil.getRequiredWidth(captionText);
                 if (availableWidth > captionWidth) {
                     availableWidth -= captionWidth;
 
@@ -764,4 +770,7 @@ public class VCaption extends HTML {
 
     }
 
+    private static Logger getLogger() {
+        return Logger.getLogger(VCaption.class.getName());
+    }
 }

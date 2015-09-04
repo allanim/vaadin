@@ -16,7 +16,6 @@ import java.util.jar.JarFile;
 
 import junit.framework.TestCase;
 
-import org.junit.Ignore;
 import org.junit.Test;
 
 public class ClassesSerializableTest extends TestCase {
@@ -74,11 +73,13 @@ public class ClassesSerializableTest extends TestCase {
             "com\\.vaadin\\.server\\.AbstractClientConnector\\$1\\$1", //
             "com\\.vaadin\\.server\\.JsonCodec\\$1", //
             "com\\.vaadin\\.server\\.communication\\.PushConnection", //
-            "com\\.vaadin\\.server\\.communication\\.AtmospherePushConnection", //
+            "com\\.vaadin\\.server\\.communication\\.AtmospherePushConnection.*", //
             "com\\.vaadin\\.util\\.ConnectorHelper", //
             "com\\.vaadin\\.server\\.VaadinSession\\$FutureAccess", //
             "com\\.vaadin\\.external\\..*", //
             "com\\.vaadin\\.util\\.WeakValueMap.*", //
+            "com\\.vaadin\\.themes\\.valoutil\\.BodyStyleName", //
+            "com\\.vaadin\\.server\\.communication\\.JSR356WebsocketInitializer.*", //
     };
 
     /**

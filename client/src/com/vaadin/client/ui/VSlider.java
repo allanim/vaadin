@@ -34,7 +34,7 @@ import com.google.gwt.user.client.ui.HTML;
 import com.google.gwt.user.client.ui.HasValue;
 import com.vaadin.client.ApplicationConnection;
 import com.vaadin.client.BrowserInfo;
-import com.vaadin.client.Util;
+import com.vaadin.client.WidgetUtil;
 import com.vaadin.shared.ui.slider.SliderOrientation;
 
 public class VSlider extends SimpleFocusablePanel implements Field,
@@ -160,11 +160,7 @@ public class VSlider extends SimpleFocusablePanel implements Field,
     }
 
     public void setFeedbackValue(double value) {
-        String currentValue = "" + value;
-        if (resolution == 0) {
-            currentValue = "" + new Double(value).intValue();
-        }
-        feedback.setText(currentValue);
+        feedback.setText(String.valueOf(value));
     }
 
     private void updateFeedbackPosition() {
@@ -201,7 +197,7 @@ public class VSlider extends SimpleFocusablePanel implements Field,
          * applied to call code for parentElement only in case it exists.
          */
         if (getElement().hasParentElement()) {
-            final Element p = getElement().getParentElement();
+            final Element p = getElement();
             if (p.getPropertyInt(domProperty) > MIN_SIZE) {
                 if (isVertical()) {
                     setHeight();
@@ -216,8 +212,9 @@ public class VSlider extends SimpleFocusablePanel implements Field,
 
                     @Override
                     public void execute() {
-                        final Element p = getElement().getParentElement();
-                        if (p.getPropertyInt(domProperty) > (MIN_SIZE + 5)) {
+                        final Element p = getElement();
+                        if (p.getPropertyInt(domProperty) > (MIN_SIZE + 5)
+                                || propertyNotNullOrEmpty(styleAttribute, p)) {
                             if (isVertical()) {
                                 setHeight();
                             } else {
@@ -226,6 +223,14 @@ public class VSlider extends SimpleFocusablePanel implements Field,
                             // Ensure correct position
                             setValue(value, false);
                         }
+                    }
+
+                    // Style has non empty property
+                    private boolean propertyNotNullOrEmpty(
+                            final String styleAttribute, final Element p) {
+                        return p.getStyle().getProperty(styleAttribute) != null
+                                && !p.getStyle().getProperty(styleAttribute)
+                                        .isEmpty();
                     }
                 });
             }
@@ -299,7 +304,7 @@ public class VSlider extends SimpleFocusablePanel implements Field,
         } else if (DOM.eventGetType(event) == Event.ONMOUSEDOWN) {
             feedbackPopup.show();
         }
-        if (Util.isTouchEvent(event)) {
+        if (WidgetUtil.isTouchEvent(event)) {
             event.preventDefault(); // avoid simulated events
             event.stopPropagation();
         }
@@ -423,9 +428,9 @@ public class VSlider extends SimpleFocusablePanel implements Field,
      */
     protected int getEventPosition(Event event) {
         if (isVertical()) {
-            return Util.getTouchOrMouseClientY(event);
+            return WidgetUtil.getTouchOrMouseClientY(event);
         } else {
-            return Util.getTouchOrMouseClientX(event);
+            return WidgetUtil.getTouchOrMouseClientX(event);
         }
     }
 

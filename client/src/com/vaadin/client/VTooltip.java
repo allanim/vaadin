@@ -20,17 +20,7 @@ import com.google.gwt.aria.client.RelevantValue;
 import com.google.gwt.aria.client.Roles;
 import com.google.gwt.dom.client.Element;
 import com.google.gwt.dom.client.Style.Display;
-import com.google.gwt.event.dom.client.BlurEvent;
-import com.google.gwt.event.dom.client.BlurHandler;
-import com.google.gwt.event.dom.client.DomEvent;
-import com.google.gwt.event.dom.client.FocusEvent;
-import com.google.gwt.event.dom.client.FocusHandler;
-import com.google.gwt.event.dom.client.KeyDownEvent;
-import com.google.gwt.event.dom.client.KeyDownHandler;
-import com.google.gwt.event.dom.client.MouseDownEvent;
-import com.google.gwt.event.dom.client.MouseDownHandler;
-import com.google.gwt.event.dom.client.MouseMoveEvent;
-import com.google.gwt.event.dom.client.MouseMoveHandler;
+import com.google.gwt.event.dom.client.*;
 import com.google.gwt.user.client.DOM;
 import com.google.gwt.user.client.Event;
 import com.google.gwt.user.client.Timer;
@@ -70,6 +60,11 @@ public class VTooltip extends VOverlay {
     private int closeTimeout;
 
     /**
+     * Current element hovered
+     */
+    private com.google.gwt.dom.client.Element currentElement = null;
+
+    /**
      * Used to show tooltips; usually used via the singleton in
      * {@link ApplicationConnection}. NOTE that #setOwner(Widget)} should be
      * called after instantiating.
@@ -94,6 +89,9 @@ public class VTooltip extends VOverlay {
                 LiveValue.ASSERTIVE);
         Roles.getTooltipRole().setAriaRelevantProperty(getElement(),
                 RelevantValue.ADDITIONS);
+
+        // Tooltip needs to be on top of other VOverlay elements.
+        setZIndex(VOverlay.Z_INDEX + 1);
     }
 
     /**
@@ -134,11 +132,11 @@ public class VTooltip extends VOverlay {
             description.setInnerHTML(info.getTitle());
             /*
              * Issue #11871: to correctly update the offsetWidth of description
-             * element we need to clear style width of it's parent DIV from old
+             * element we need to clear style width of its parent DIV from old
              * value (in some strange cases this width=[tooltip MAX_WIDTH] after
              * tooltip text has been already updated to new shortly value:
              * 
-             * <div class="popupContent"> <div style="width: 500px;"> <div
+             * <div class="popupContent"> <div style="width:500px;"> <div
              * class="v-errormessage" aria-hidden="true" style="display: none;">
              * <div class="gwt-HTML"> </div> </div> <div
              * class="v-tooltip-text">This is a short tooltip</div> </div>
@@ -179,8 +177,20 @@ public class VTooltip extends VOverlay {
                         offsetWidth = getOffsetWidth();
                         offsetHeight = getOffsetHeight();
                     }
-                    int x = getFinalX(offsetWidth);
-                    int y = getFinalY(offsetHeight);
+
+                    int x = 0;
+                    int y = 0;
+                    if (BrowserInfo.get().isTouchDevice()) {
+                        setMaxWidth(Window.getClientWidth());
+                        offsetWidth = getOffsetWidth();
+                        offsetHeight = getOffsetHeight();
+
+                        x = getFinalTouchX(offsetWidth);
+                        y = getFinalTouchY(offsetHeight);
+                    } else {
+                        x = getFinalX(offsetWidth);
+                        y = getFinalY(offsetHeight);
+                    }
 
                     setPopupPosition(x, y);
                     sinkEvents(Event.ONMOUSEOVER | Event.ONMOUSEOUT);
@@ -222,6 +232,41 @@ public class VTooltip extends VOverlay {
                 }
 
                 /**
+                 * Return the final X-coordinate of the tooltip based on cursor
+                 * position, size of the tooltip, size of the page and necessary
+                 * margins.
+                 *
+                 * @param offsetWidth
+                 * @return The final X-coordinate
+                 */
+                private int getFinalTouchX(int offsetWidth) {
+                    int x = 0;
+                    int widthNeeded = 10 + offsetWidth;
+                    int roomLeft = currentElement != null ? currentElement
+                            .getAbsoluteLeft() : EVENT_XY_POSITION_OUTSIDE;
+                    int viewPortWidth = Window.getClientWidth();
+                    int roomRight = viewPortWidth - roomLeft;
+                    if (roomRight > widthNeeded) {
+                        x = roomLeft;
+                    } else {
+                        x = roomLeft - offsetWidth;
+                    }
+                    if (x + offsetWidth - Window.getScrollLeft() > viewPortWidth) {
+                        x = viewPortWidth - offsetWidth
+                                + Window.getScrollLeft();
+                    }
+
+                    if (roomLeft != EVENT_XY_POSITION_OUTSIDE) {
+                        // Do not allow x to be zero, for otherwise the tooltip
+                        // does not close when the mouse is moved (see
+                        // isTooltipOpen()). #15129
+                        int minX = Window.getScrollLeft();
+                        x = Math.max(x, minX);
+                    }
+                    return x;
+                }
+
+                /**
                  * Return the final Y-coordinate of the tooltip based on cursor
                  * position, size of the tooltip, size of the page and necessary
                  * margins.
@@ -232,7 +277,7 @@ public class VTooltip extends VOverlay {
                  */
                 private int getFinalY(int offsetHeight) {
                     int y = 0;
-                    int heightNeeded = 10 + MARGIN + offsetHeight;
+                    int heightNeeded = 10 + offsetHeight;
                     int roomAbove = tooltipEventMouseY;
                     int roomBelow = Window.getClientHeight() - roomAbove;
 
@@ -259,6 +304,54 @@ public class VTooltip extends VOverlay {
                         // does not close when the mouse is moved (see
                         // isTooltipOpen()). #15129
                         int minY = Window.getScrollTop() + MARGIN;
+                        y = Math.max(y, minY);
+                    }
+                    return y;
+                }
+
+                /**
+                 * Return the final Y-coordinate of the tooltip based on cursor
+                 * position, size of the tooltip, size of the page and necessary
+                 * margins.
+                 *
+                 * @param offsetHeight
+                 * @return The final y-coordinate
+                 *
+                 */
+                private int getFinalTouchY(int offsetHeight) {
+                    int y = 0;
+                    int heightNeeded = 10 + offsetHeight;
+                    int roomAbove = currentElement != null ? currentElement
+                            .getAbsoluteTop()
+                            + currentElement.getOffsetHeight()
+                            : EVENT_XY_POSITION_OUTSIDE;
+                    int roomBelow = Window.getClientHeight() - roomAbove;
+
+                    if (roomBelow > heightNeeded) {
+                        y = roomAbove;
+                    } else {
+                        y = roomAbove
+                                - offsetHeight
+                                - (currentElement != null ? currentElement
+                                        .getOffsetHeight() : 0);
+                    }
+
+                    if (y + offsetHeight - Window.getScrollTop() > Window
+                            .getClientHeight()) {
+                        y = roomAbove - 5 - offsetHeight
+                                + Window.getScrollTop();
+                        if (y - Window.getScrollTop() < 0) {
+                            // tooltip does not fit on top of the mouse either,
+                            // put it at the top of the screen
+                            y = Window.getScrollTop();
+                        }
+                    }
+
+                    if (roomAbove != EVENT_XY_POSITION_OUTSIDE) {
+                        // Do not allow y to be zero, for otherwise the tooltip
+                        // does not close when the mouse is moved (see
+                        // isTooltipOpen()). #15129
+                        int minY = Window.getScrollTop();
                         y = Math.max(y, minY);
                     }
                     return y;
@@ -391,11 +484,6 @@ public class VTooltip extends VOverlay {
             KeyDownHandler, FocusHandler, BlurHandler, MouseDownHandler {
 
         /**
-         * Current element hovered
-         */
-        private com.google.gwt.dom.client.Element currentElement = null;
-
-        /**
          * Marker for handling of tooltip through focus
          */
         private boolean handledByFocus;
@@ -524,6 +612,11 @@ public class VTooltip extends VOverlay {
                 updatePosition(event, isFocused);
                 // Schedule timer for showing the tooltip according to if it
                 // was recently closed or not.
+
+                if (BrowserInfo.get().isIOS()) {
+                    element.focus();
+                }
+
                 int timeout = justClosed ? getQuickOpenDelay() : getOpenDelay();
                 if (timeout == 0) {
                     showTooltip();

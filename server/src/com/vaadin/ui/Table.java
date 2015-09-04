@@ -34,6 +34,9 @@ import java.util.StringTokenizer;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import org.jsoup.nodes.Element;
+import org.jsoup.select.Elements;
+
 import com.vaadin.data.Container;
 import com.vaadin.data.Item;
 import com.vaadin.data.Property;
@@ -62,6 +65,11 @@ import com.vaadin.server.Resource;
 import com.vaadin.shared.MouseEventDetails;
 import com.vaadin.shared.ui.MultiSelectMode;
 import com.vaadin.shared.ui.table.TableConstants;
+import com.vaadin.shared.util.SharedUtil;
+import com.vaadin.ui.declarative.DesignAttributeHandler;
+import com.vaadin.ui.declarative.DesignContext;
+import com.vaadin.ui.declarative.DesignException;
+import com.vaadin.util.ReflectTools;
 
 /**
  * <p>
@@ -442,7 +450,7 @@ public class Table extends AbstractSelect implements Action.Container,
     /**
      * Holds value of property selectable.
      */
-    private boolean selectable = false;
+    private Boolean selectable;
 
     /**
      * Holds value of property columnHeaderMode.
@@ -669,26 +677,6 @@ public class Table extends AbstractSelect implements Action.Container,
             }
         }
 
-        // Removes alignments, icons and headers from hidden columns
-        if (this.visibleColumns != null) {
-            boolean disabledHere = disableContentRefreshing();
-            try {
-                for (final Iterator<Object> i = this.visibleColumns.iterator(); i
-                        .hasNext();) {
-                    final Object col = i.next();
-                    if (!newVC.contains(col)) {
-                        setColumnHeader(col, null);
-                        setColumnAlignment(col, (Align) null);
-                        setColumnIcon(col, null);
-                    }
-                }
-            } finally {
-                if (disabledHere) {
-                    enableContentRefreshing(false);
-                }
-            }
-        }
-
         this.visibleColumns = newVC;
 
         // Assures visual refresh
@@ -699,7 +687,7 @@ public class Table extends AbstractSelect implements Action.Container,
      * Gets the headers of the columns.
      * 
      * <p>
-     * The headers match the property id:s given my the set visible column
+     * The headers match the property id:s given by the set visible column
      * headers. The table must be set in either
      * {@link #COLUMN_HEADER_MODE_EXPLICIT} or
      * {@link #COLUMN_HEADER_MODE_EXPLICIT_DEFAULTS_ID} mode to show the
@@ -726,7 +714,7 @@ public class Table extends AbstractSelect implements Action.Container,
      * Sets the headers of the columns.
      * 
      * <p>
-     * The headers match the property id:s given my the set visible column
+     * The headers match the property id:s given by the set visible column
      * headers. The table must be set in either
      * {@link #COLUMN_HEADER_MODE_EXPLICIT} or
      * {@link #COLUMN_HEADER_MODE_EXPLICIT_DEFAULTS_ID} mode to show the
@@ -759,7 +747,7 @@ public class Table extends AbstractSelect implements Action.Container,
      * Gets the icons of the columns.
      * 
      * <p>
-     * The icons in headers match the property id:s given my the set visible
+     * The icons in headers match the property id:s given by the set visible
      * column headers. The table must be set in either
      * {@link #COLUMN_HEADER_MODE_EXPLICIT} or
      * {@link #COLUMN_HEADER_MODE_EXPLICIT_DEFAULTS_ID} mode to show the headers
@@ -786,7 +774,7 @@ public class Table extends AbstractSelect implements Action.Container,
      * Sets the icons of the columns.
      * 
      * <p>
-     * The icons in headers match the property id:s given my the set visible
+     * The icons in headers match the property id:s given by the set visible
      * column headers. The table must be set in either
      * {@link #COLUMN_HEADER_MODE_EXPLICIT} or
      * {@link #COLUMN_HEADER_MODE_EXPLICIT_DEFAULTS_ID} mode to show the headers
@@ -886,7 +874,7 @@ public class Table extends AbstractSelect implements Action.Container,
     }
 
     /**
-     * Sets columns width (in pixels). Theme may not necessary respect very
+     * Sets columns width (in pixels). Theme may not necessarily respect very
      * small or very big values. Setting width to -1 (default) means that theme
      * will make decision of width.
      * 
@@ -895,9 +883,9 @@ public class Table extends AbstractSelect implements Action.Container,
      * is used. See @link {@link #setColumnExpandRatio(Object, float)}.
      * 
      * @param propertyId
-     *            colunmns property id
+     *            columns property id
      * @param width
-     *            width to be reserved for colunmns content
+     *            width to be reserved for columns content
      * @since 4.0.3
      */
     public void setColumnWidth(Object propertyId, int width) {
@@ -974,7 +962,7 @@ public class Table extends AbstractSelect implements Action.Container,
     }
 
     /**
-     * Gets the column expand ratio for a columnd. See
+     * Gets the column expand ratio for a column. See
      * {@link #setColumnExpandRatio(Object, float)}
      * 
      * @param propertyId
@@ -1090,7 +1078,7 @@ public class Table extends AbstractSelect implements Action.Container,
      */
     public Object getCurrentPageFirstItemId() {
 
-        // Priorise index over id if indexes are supported
+        // Prioritise index over id if indexes are supported
         if (items instanceof Container.Indexed) {
             final int index = getCurrentPageFirstItemIndex();
             Object id = null;
@@ -1192,7 +1180,7 @@ public class Table extends AbstractSelect implements Action.Container,
      * Gets the icon Resource for the specified column.
      * 
      * @param propertyId
-     *            the propertyId indentifying the column.
+     *            the propertyId identifying the column.
      * @return the icon for the specified column; null if the column has no icon
      *         set, or if the column is not visible.
      */
@@ -1323,6 +1311,8 @@ public class Table extends AbstractSelect implements Action.Container,
      *            the desired collapsedness.
      * @throws IllegalStateException
      *             if column collapsing is not allowed
+     * @throws IllegalArgumentException
+     *             if the property id does not exist
      */
     public void setColumnCollapsed(Object propertyId, boolean collapsed)
             throws IllegalStateException {
@@ -1332,11 +1322,20 @@ public class Table extends AbstractSelect implements Action.Container,
         if (collapsed && noncollapsibleColumns.contains(propertyId)) {
             throw new IllegalStateException("The column is noncollapsible!");
         }
+        if (!getContainerPropertyIds().contains(propertyId)
+                && !columnGenerators.containsKey(propertyId)) {
+            throw new IllegalArgumentException("Property '" + propertyId
+                    + "' was not found in the container");
+        }
 
         if (collapsed) {
-            collapsedColumns.add(propertyId);
+            if (collapsedColumns.add(propertyId)) {
+                fireColumnCollapseEvent(propertyId);
+            }
         } else {
-            collapsedColumns.remove(propertyId);
+            if (collapsedColumns.remove(propertyId)) {
+                fireColumnCollapseEvent(propertyId);
+            }
         }
 
         // Assures the visual refresh
@@ -1601,15 +1600,19 @@ public class Table extends AbstractSelect implements Action.Container,
     }
 
     /**
-     * Getter for property selectable.
+     * Returns whether table is selectable.
      * 
      * <p>
-     * The table is not selectable by default.
+     * The table is not selectable until it's explicitly set as selectable or at
+     * least one {@link ValueChangeListener} is added.
      * </p>
      * 
-     * @return the Value of property selectable.
+     * @return whether table is selectable.
      */
     public boolean isSelectable() {
+        if (selectable == null) {
+            return hasListeners(ValueChangeEvent.class);
+        }
         return selectable;
     }
 
@@ -1617,14 +1620,16 @@ public class Table extends AbstractSelect implements Action.Container,
      * Setter for property selectable.
      * 
      * <p>
-     * The table is not selectable by default.
+     * The table is not selectable until it's explicitly set as selectable via
+     * this method or alternatively at least one {@link ValueChangeListener} is
+     * added.
      * </p>
      * 
      * @param selectable
      *            the New value of property selectable.
      */
     public void setSelectable(boolean selectable) {
-        if (this.selectable != selectable) {
+        if (!SharedUtil.equals(this.selectable, selectable)) {
             this.selectable = selectable;
             markAsDirty();
         }
@@ -2591,7 +2596,7 @@ public class Table extends AbstractSelect implements Action.Container,
      *            types.
      * @param itemId
      *            the Id the new row. If null, a new id is automatically
-     *            assigned. If given, the table cant already have a item with
+     *            assigned. If given, the table cannot already have a item with
      *            given id.
      * @return Returns item id for the new row. Returns null if operation fails.
      */
@@ -3187,6 +3192,10 @@ public class Table extends AbstractSelect implements Action.Container,
                 fireColumnResizeEvent(propertyId, previousWidth, currentWidth);
             }
         }
+    }
+
+    private void fireColumnCollapseEvent(Object propertyId) {
+        fireEvent(new ColumnCollapseEvent(this, propertyId));
     }
 
     private void fireColumnResizeEvent(Object propertyId, int previousWidth,
@@ -3854,8 +3863,14 @@ public class Table extends AbstractSelect implements Action.Container,
         }
     }
 
-    private boolean rowHeadersAreEnabled() {
-        return getRowHeaderMode() != ROW_HEADER_MODE_HIDDEN;
+    /**
+     * Checks whether row headers are visible.
+     * 
+     * @return {@code false} if row headers are hidden, {@code true} otherwise
+     * @since 7.3.9
+     */
+    protected boolean rowHeadersAreEnabled() {
+        return getRowHeaderMode() != RowHeaderMode.HIDDEN;
     }
 
     private void paintRow(PaintTarget target, final Object[][] cells,
@@ -4313,7 +4328,7 @@ public class Table extends AbstractSelect implements Action.Container,
      * Adds a new property to the table and show it as a visible column.
      * 
      * @param propertyId
-     *            the Id of the proprty.
+     *            the Id of the property.
      * @param type
      *            the class of the property.
      * @param defaultValue
@@ -4348,7 +4363,7 @@ public class Table extends AbstractSelect implements Action.Container,
      * Adds a new property to the table and show it as a visible column.
      * 
      * @param propertyId
-     *            the Id of the proprty
+     *            the Id of the property
      * @param type
      *            the class of the property
      * @param defaultValue
@@ -4558,7 +4573,7 @@ public class Table extends AbstractSelect implements Action.Container,
         disableContentRefreshing();
         super.containerPropertySetChange(event);
 
-        // sanitetize visibleColumns. note that we are not adding previously
+        // sanitize visibleColumns. note that we are not adding previously
         // non-existing properties as columns
         Collection<?> containerPropertyIds = getContainerDataSource()
                 .getContainerPropertyIds();
@@ -4744,11 +4759,11 @@ public class Table extends AbstractSelect implements Action.Container,
      * If table is editable a editor of type Field is created for each table
      * cell. The assigned FieldFactory is used to create the instances.
      * 
-     * To provide custom editors for table cells create a class implementins the
+     * To provide custom editors for table cells create a class implementing the
      * FieldFactory interface, and assign it to table, and set the editable
      * property to true.
      * 
-     * @return true if table is editable, false oterwise.
+     * @return true if table is editable, false otherwise.
      * @see Field
      * @see FieldFactory
      * 
@@ -4763,7 +4778,7 @@ public class Table extends AbstractSelect implements Action.Container,
      * If table is editable a editor of type Field is created for each table
      * cell. The assigned FieldFactory is used to create the instances.
      * 
-     * To provide custom editors for table cells create a class implementins the
+     * To provide custom editors for table cells create a class implementing the
      * FieldFactory interface, and assign it to table, and set the editable
      * property to true.
      * 
@@ -5333,7 +5348,7 @@ public class Table extends AbstractSelect implements Action.Container,
         /**
          * Gets the property id of the column which header was pressed
          * 
-         * @return The column propety id
+         * @return The column property id
          */
         public Object getPropertyId() {
             return columnPropertyId;
@@ -5383,7 +5398,7 @@ public class Table extends AbstractSelect implements Action.Container,
         /**
          * Gets the property id of the column which header was pressed
          * 
-         * @return The column propety id
+         * @return The column property id
          */
         public Object getPropertyId() {
             return columnPropertyId;
@@ -5743,6 +5758,53 @@ public class Table extends AbstractSelect implements Action.Container,
     }
 
     /**
+     * This event is fired when the collapse state of a column changes
+     */
+    public static class ColumnCollapseEvent extends Component.Event {
+
+        public static final Method METHOD = ReflectTools.findMethod(
+                ColumnCollapseListener.class, "columnCollapseStateChange",
+                ColumnCollapseEvent.class);
+        private Object propertyId;
+
+        /**
+         * Constructor
+         * 
+         * @param source
+         *            The source of the event
+         * @param propertyId
+         *            The id of the column
+         */
+        public ColumnCollapseEvent(Component source, Object propertyId) {
+            super(source);
+            this.propertyId = propertyId;
+        }
+
+        /**
+         * Gets the id of the column whose collapse state changed
+         * 
+         * @return the property id of the column
+         */
+        public Object getPropertyId() {
+            return propertyId;
+        }
+    }
+
+    /**
+     * Interface for listening to column collapse events.
+     */
+    public interface ColumnCollapseListener extends Serializable {
+
+        /**
+         * This method is triggered when the collapse state for a column has
+         * changed
+         * 
+         * @param event
+         */
+        public void columnCollapseStateChange(ColumnCollapseEvent event);
+    }
+
+    /**
      * Adds a column reorder listener to the Table. A column reorder listener is
      * called when a user reorders columns.
      * 
@@ -5781,6 +5843,29 @@ public class Table extends AbstractSelect implements Action.Container,
     @Deprecated
     public void removeListener(ColumnReorderListener listener) {
         removeColumnReorderListener(listener);
+    }
+
+    /**
+     * Adds a column collapse listener to the Table. A column collapse listener
+     * is called when the collapsed state of a column changes.
+     * 
+     * @param listener
+     *            The listener to attach
+     */
+    public void addColumnCollapseListener(ColumnCollapseListener listener) {
+        addListener(TableConstants.COLUMN_COLLAPSE_EVENT_ID,
+                ColumnCollapseEvent.class, listener, ColumnCollapseEvent.METHOD);
+    }
+
+    /**
+     * Removes a column reorder listener from the Table.
+     * 
+     * @param listener
+     *            The listener to remove
+     */
+    public void removeColumnCollapseListener(ColumnCollapseListener listener) {
+        removeListener(TableConstants.COLUMN_COLLAPSE_EVENT_ID,
+                ColumnCollapseEvent.class, listener);
     }
 
     /**
@@ -6010,6 +6095,282 @@ public class Table extends AbstractSelect implements Action.Container,
     @Deprecated
     public Iterator<Component> getComponentIterator() {
         return iterator();
+    }
+
+    @Override
+    public void readDesign(Element design, DesignContext context) {
+        super.readDesign(design, context);
+
+        if (design.hasAttr("sortable")) {
+            setSortEnabled(DesignAttributeHandler.readAttribute("sortable",
+                    design.attributes(), boolean.class));
+        }
+
+        readColumns(design);
+        readHeader(design);
+        readBody(design, context);
+        readFooter(design);
+    }
+
+    private void readColumns(Element design) {
+        Element colgroup = design.select("> table > colgroup").first();
+
+        if (colgroup != null) {
+            int i = 0;
+            List<Object> pIds = new ArrayList<Object>();
+            for (Element col : colgroup.children()) {
+                if (!col.tagName().equals("col")) {
+                    throw new DesignException("invalid column");
+                }
+
+                String id = DesignAttributeHandler.readAttribute("property-id",
+                        col.attributes(), "property-" + i++, String.class);
+                pIds.add(id);
+
+                addContainerProperty(id, String.class, null);
+
+                if (col.hasAttr("width")) {
+                    setColumnWidth(
+                            id,
+                            DesignAttributeHandler.readAttribute("width",
+                                    col.attributes(), Integer.class));
+                }
+                if (col.hasAttr("center")) {
+                    setColumnAlignment(id, Align.CENTER);
+                } else if (col.hasAttr("right")) {
+                    setColumnAlignment(id, Align.RIGHT);
+                }
+                if (col.hasAttr("expand")) {
+                    if (col.attr("expand").isEmpty()) {
+                        setColumnExpandRatio(id, 1);
+                    } else {
+                        setColumnExpandRatio(id,
+                                DesignAttributeHandler.readAttribute("expand",
+                                        col.attributes(), float.class));
+                    }
+                }
+                if (col.hasAttr("collapsible")) {
+                    setColumnCollapsible(id,
+                            DesignAttributeHandler.readAttribute("collapsible",
+                                    col.attributes(), boolean.class));
+                }
+                if (col.hasAttr("collapsed")) {
+                    setColumnCollapsed(id,
+                            DesignAttributeHandler.readAttribute("collapsed",
+                                    col.attributes(), boolean.class));
+                }
+            }
+            setVisibleColumns(pIds.toArray());
+        }
+    }
+
+    private void readFooter(Element design) {
+        readHeaderOrFooter(design, false);
+    }
+
+    private void readHeader(Element design) {
+        readHeaderOrFooter(design, true);
+    }
+
+    @Override
+    protected void readItems(Element design, DesignContext context) {
+        // Do nothing - header/footer and inline data must be handled after
+        // colgroup.
+    }
+
+    private void readHeaderOrFooter(Element design, boolean header) {
+        String selector = header ? "> table > thead" : "> table > tfoot";
+        Element elem = design.select(selector).first();
+        if (elem != null) {
+            if (!header) {
+                setFooterVisible(true);
+            }
+            if (elem.children().size() != 1) {
+                throw new DesignException(
+                        "Table header and footer should contain exactly one <tr> element");
+            }
+            Element tr = elem.child(0);
+            Elements elems = tr.children();
+            Collection<?> propertyIds = visibleColumns;
+            if (elems.size() != propertyIds.size()) {
+                throw new DesignException(
+                        "Table header and footer should contain as many items as there"
+                                + " are columns in the Table.");
+            }
+            Iterator<?> propertyIt = propertyIds.iterator();
+            for (Element e : elems) {
+                String columnValue = e.html();
+                Object propertyId = propertyIt.next();
+                if (header) {
+                    setColumnHeader(propertyId, columnValue);
+                    if (e.hasAttr("icon")) {
+                        setColumnIcon(
+                                propertyId,
+                                DesignAttributeHandler.readAttribute("icon",
+                                        e.attributes(), Resource.class));
+                    }
+                } else {
+                    setColumnFooter(propertyId, columnValue);
+                }
+            }
+        }
+    }
+
+    protected void readBody(Element design, DesignContext context) {
+        Element tbody = design.select("> table > tbody").first();
+        if (tbody == null) {
+            return;
+        }
+
+        Set<String> selected = new HashSet<String>();
+        for (Element tr : tbody.children()) {
+            readItem(tr, selected, context);
+        }
+    }
+
+    @Override
+    protected Object readItem(Element tr, Set<String> selected,
+            DesignContext context) {
+        Elements cells = tr.children();
+        if (visibleColumns.size() != cells.size()) {
+            throw new DesignException(
+                    "Wrong number of columns in a Table row. Expected "
+                            + visibleColumns.size() + ", was " + cells.size()
+                            + ".");
+        }
+        Object[] data = new String[cells.size()];
+        for (int c = 0; c < cells.size(); ++c) {
+            data[c] = cells.get(c).html();
+        }
+
+        Object itemId = addItem(data,
+                tr.hasAttr("item-id") ? tr.attr("item-id") : null);
+
+        if (itemId == null) {
+            throw new DesignException("Failed to add a Table row: " + data);
+        }
+
+        return itemId;
+    }
+
+    @Override
+    public void writeDesign(Element design, DesignContext context) {
+        Table def = context.getDefaultInstance(this);
+
+        DesignAttributeHandler.writeAttribute("sortable", design.attributes(),
+                isSortEnabled(), def.isSortEnabled(), boolean.class);
+
+        Element table = null;
+        boolean hasColumns = getVisibleColumns().length != 0;
+        if (hasColumns) {
+            table = design.appendElement("table");
+            writeColumns(table, def);
+            writeHeader(table, def);
+        }
+        super.writeDesign(design, context);
+        if (hasColumns) {
+            writeFooter(table);
+        }
+    }
+
+    private void writeColumns(Element table, Table def) {
+        Object[] columns = getVisibleColumns();
+        if (columns.length == 0) {
+            return;
+        }
+
+        Element colgroup = table.appendElement("colgroup");
+        for (Object id : columns) {
+            Element col = colgroup.appendElement("col");
+
+            col.attr("property-id", id.toString());
+
+            if (getColumnAlignment(id) == Align.CENTER) {
+                col.attr("center", "");
+            } else if (getColumnAlignment(id) == Align.RIGHT) {
+                col.attr("right", "");
+            }
+
+            DesignAttributeHandler.writeAttribute("width", col.attributes(),
+                    getColumnWidth(id), def.getColumnWidth(null), int.class);
+
+            DesignAttributeHandler.writeAttribute("expand", col.attributes(),
+                    getColumnExpandRatio(id), def.getColumnExpandRatio(null),
+                    float.class);
+
+            DesignAttributeHandler.writeAttribute("collapsible",
+                    col.attributes(), isColumnCollapsible(id),
+                    def.isColumnCollapsible(null), boolean.class);
+
+            DesignAttributeHandler.writeAttribute("collapsed",
+                    col.attributes(), isColumnCollapsed(id),
+                    def.isColumnCollapsed(null), boolean.class);
+        }
+    }
+
+    private void writeHeader(Element table, Table def) {
+        Object[] columns = getVisibleColumns();
+        if (columns.length == 0
+                || (columnIcons.isEmpty() && columnHeaders.isEmpty())) {
+            return;
+        }
+
+        Element header = table.appendElement("thead").appendElement("tr");
+        for (Object id : columns) {
+            Element th = header.appendElement("th");
+            th.html(getColumnHeader(id));
+            DesignAttributeHandler.writeAttribute("icon", th.attributes(),
+                    getColumnIcon(id), def.getColumnIcon(null), Resource.class);
+        }
+
+    }
+
+    private void writeFooter(Element table) {
+        Object[] columns = getVisibleColumns();
+        if (columns.length == 0 || columnFooters.isEmpty()) {
+            return;
+        }
+
+        Element footer = table.appendElement("tfoot").appendElement("tr");
+        for (Object id : columns) {
+            footer.appendElement("td").text(getColumnFooter(id));
+        }
+    }
+
+    @Override
+    protected void writeItems(Element design, DesignContext context) {
+        if (getVisibleColumns().length == 0) {
+            return;
+        }
+        Element tbody = design.child(0).appendElement("tbody");
+        super.writeItems(tbody, context);
+    }
+
+    @Override
+    protected Element writeItem(Element tbody, Object itemId,
+            DesignContext context) {
+        Element tr = tbody.appendElement("tr");
+        tr.attr("item-id", String.valueOf(itemId));
+        Item item = getItem(itemId);
+        for (Object id : getVisibleColumns()) {
+            Element td = tr.appendElement("td");
+            Object value = item.getItemProperty(id).getValue();
+            td.html(value != null ? value.toString() : "");
+        }
+        return tr;
+    }
+
+    @Override
+    protected Collection<String> getCustomAttributes() {
+        Collection<String> result = super.getCustomAttributes();
+        result.add("sortable");
+        result.add("sort-enabled");
+        result.add("sort-disabled");
+        result.add("footer-visible");
+        result.add("item-caption-mode");
+        result.add("current-page-first-item-id");
+        result.add("current-page-first-item-index");
+        return result;
     }
 
     private final Logger getLogger() {

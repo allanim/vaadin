@@ -16,9 +16,16 @@
 
 package com.vaadin.ui;
 
+import java.util.Collection;
+
+import org.jsoup.nodes.Attributes;
+import org.jsoup.nodes.Element;
+
 import com.vaadin.shared.ui.slider.SliderOrientation;
 import com.vaadin.shared.ui.slider.SliderServerRpc;
 import com.vaadin.shared.ui.slider.SliderState;
+import com.vaadin.ui.declarative.DesignAttributeHandler;
+import com.vaadin.ui.declarative.DesignContext;
 
 /**
  * A component for selecting a numerical value within a range.
@@ -97,9 +104,9 @@ public class Slider extends AbstractField<Double> {
      */
     public Slider(double min, double max, int resolution) {
         this();
-        setMin(min);
-        setMax(max);
         setResolution(resolution);
+        setMax(max);
+        setMin(min);
     }
 
     /**
@@ -160,9 +167,15 @@ public class Slider extends AbstractField<Double> {
      *            The new maximum slider value
      */
     public void setMax(double max) {
-        getState().maxValue = max;
-        if (getValue() > max) {
-            setValue(max);
+        double roundedMax = getRoundedValue(max);
+        getState().maxValue = roundedMax;
+
+        if (getMin() > roundedMax) {
+            getState().minValue = roundedMax;
+        }
+
+        if (getValue() > roundedMax) {
+            setValue(roundedMax);
         }
     }
 
@@ -179,13 +192,19 @@ public class Slider extends AbstractField<Double> {
      * Set the minimum slider value. If the current value of the slider is
      * smaller than this, the value is set to the new minimum.
      * 
-     * @param max
+     * @param min
      *            The new minimum slider value
      */
     public void setMin(double min) {
-        getState().minValue = min;
-        if (getValue() < min) {
-            setValue(min);
+        double roundedMin = getRoundedValue(min);
+        getState().minValue = roundedMin;
+
+        if (getMax() < roundedMin) {
+            getState().maxValue = roundedMin;
+        }
+
+        if (getValue() < roundedMin) {
+            setValue(roundedMin);
         }
     }
 
@@ -251,26 +270,26 @@ public class Slider extends AbstractField<Double> {
      */
     @Override
     protected void setValue(Double value, boolean repaintIsNotNeeded) {
-        final double v = value.doubleValue();
-        final int resolution = getResolution();
-        double newValue;
+        double newValue = getRoundedValue(value);
 
-        if (resolution > 0) {
-            // Round up to resolution
-            newValue = (int) (v * Math.pow(10, resolution));
-            newValue = newValue / Math.pow(10, resolution);
-            if (getMin() > newValue || getMax() < newValue) {
-                throw new ValueOutOfBoundsException(value);
-            }
-        } else {
-            newValue = (int) v;
-            if (getMin() > newValue || getMax() < newValue) {
-                throw new ValueOutOfBoundsException(value);
-            }
+        if (getMin() > newValue || getMax() < newValue) {
+            throw new ValueOutOfBoundsException(newValue);
         }
 
         getState().value = newValue;
         super.setValue(newValue, repaintIsNotNeeded);
+    }
+
+    private double getRoundedValue(Double value) {
+        final double v = value.doubleValue();
+        final int resolution = getResolution();
+
+        double ratio = Math.pow(10, resolution);
+        if (v >= 0) {
+            return Math.floor(v * ratio) / ratio;
+        } else {
+            return Math.ceil(v * ratio) / ratio;
+        }
     }
 
     @Override
@@ -313,6 +332,8 @@ public class Slider extends AbstractField<Double> {
          * @param valueOutOfBounds
          */
         public ValueOutOfBoundsException(Double valueOutOfBounds) {
+            super(String.format("Value %s is out of bounds: [%s, %s]",
+                    valueOutOfBounds, getMin(), getMax()));
             value = valueOutOfBounds;
         }
 
@@ -331,4 +352,45 @@ public class Slider extends AbstractField<Double> {
         return Double.class;
     }
 
+    @Override
+    public void clear() {
+        super.setValue(Double.valueOf(getState().minValue));
+    }
+
+    @Override
+    public boolean isEmpty() {
+        // Slider is never really "empty"
+        return false;
+    }
+
+    @Override
+    public void readDesign(Element design, DesignContext context) {
+        super.readDesign(design, context);
+        Attributes attr = design.attributes();
+        if (attr.hasKey("vertical")) {
+            setOrientation(SliderOrientation.VERTICAL);
+        }
+        if (!attr.get("value").isEmpty()) {
+            setValue(DesignAttributeHandler.readAttribute("value", attr,
+                    Double.class));
+        }
+    }
+
+    @Override
+    public void writeDesign(Element design, DesignContext context) {
+        super.writeDesign(design, context);
+        if (getOrientation() == SliderOrientation.VERTICAL) {
+            design.attr("vertical", "");
+        }
+        Slider defaultSlider = context.getDefaultInstance(this);
+        DesignAttributeHandler.writeAttribute(this, "value",
+                design.attributes(), defaultSlider);
+    }
+
+    @Override
+    protected Collection<String> getCustomAttributes() {
+        Collection<String> result = super.getCustomAttributes();
+        result.add("orientation");
+        return result;
+    }
 }

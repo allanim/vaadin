@@ -276,8 +276,7 @@ public class ApplicationConfiguration implements EntryPoint {
      *         <code>false</code> if the path info goes after the service URL
      */
     public boolean useServiceUrlPathParam() {
-        return getJsoConfiguration(id).getConfigBoolean(
-                ApplicationConstants.SERVICE_URL_PATH_AS_PARAMETER) == Boolean.TRUE;
+        return getServiceUrlParameterName() != null;
     }
 
     /**
@@ -289,12 +288,8 @@ public class ApplicationConfiguration implements EntryPoint {
      * @return The parameter name, by default <code>v-resourcePath</code>
      */
     public String getServiceUrlParameterName() {
-        String prefix = getJsoConfiguration(id).getConfigString(
-                ApplicationConstants.SERVICE_URL_PARAMETER_NAMESPACE);
-        if (prefix == null) {
-            prefix = "";
-        }
-        return prefix + ApplicationConstants.V_RESOURCE_PATH;
+        return getJsoConfiguration(id).getConfigString(
+                ApplicationConstants.SERVICE_URL_PARAMETER_NAME);
     }
 
     public String getRootPanelId() {
@@ -411,14 +406,14 @@ public class ApplicationConfiguration implements EntryPoint {
              * desired locations even if the base URL of the page changes later
              * (e.g. with pushState)
              */
-            serviceUrl = Util.getAbsoluteUrl(serviceUrl);
+            serviceUrl = WidgetUtil.getAbsoluteUrl(serviceUrl);
         }
         // Ensure there's an ending slash (to make appending e.g. UIDL work)
         if (!useServiceUrlPathParam() && !serviceUrl.endsWith("/")) {
             serviceUrl += '/';
         }
 
-        vaadinDirUrl = Util.getAbsoluteUrl(jsoConfiguration
+        vaadinDirUrl = WidgetUtil.getAbsoluteUrl(jsoConfiguration
                 .getConfigString(ApplicationConstants.VAADIN_DIR_URL));
         uiId = jsoConfiguration.getConfigInteger(UIConstants.UI_ID_PARAMETER)
                 .intValue();
@@ -643,7 +638,8 @@ public class ApplicationConfiguration implements EntryPoint {
 
                         @Override
                         public void failed(Throwable reason) {
-                            VConsole.error(reason);
+                            getLogger().log(Level.SEVERE,
+                                    "Error loading deferred bundle", reason);
                         }
                     });
         }
@@ -692,7 +688,7 @@ public class ApplicationConfiguration implements EntryPoint {
              * cleared up when an API for extending the debug window is
              * implemented.
              */
-            VDebugWindow window = GWT.create(VDebugWindow.class);
+            VDebugWindow window = VDebugWindow.get();
 
             if (LogConfiguration.loggingIsEnabled()) {
                 window.addSection((Section) GWT.create(LogSection.class));

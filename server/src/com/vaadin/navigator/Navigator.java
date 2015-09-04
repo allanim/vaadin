@@ -32,6 +32,7 @@ package com.vaadin.navigator;
  */
 
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
@@ -597,7 +598,10 @@ public class Navigator implements Serializable {
      *         block the navigation operation
      */
     protected boolean fireBeforeViewChange(ViewChangeEvent event) {
-        for (ViewChangeListener l : listeners) {
+        // a copy of the listener list is needed to avoid
+        // ConcurrentModificationException as a listener can add/remove
+        // listeners
+        for (ViewChangeListener l : new ArrayList<ViewChangeListener>(listeners)) {
             if (!l.beforeViewChange(event)) {
                 return false;
             }
@@ -647,7 +651,10 @@ public class Navigator implements Serializable {
      *            view change event (not null)
      */
     protected void fireAfterViewChange(ViewChangeEvent event) {
-        for (ViewChangeListener l : listeners) {
+        // a copy of the listener list is needed to avoid
+        // ConcurrentModificationException as a listener can add/remove
+        // listeners
+        for (ViewChangeListener l : new ArrayList<ViewChangeListener>(listeners)) {
             l.afterViewChange(event);
         }
     }
@@ -738,9 +745,15 @@ public class Navigator implements Serializable {
      * the requested view name is found.
      * 
      * @param provider
-     *            provider to register
+     *            provider to register, not <code>null</code>
+     * @throws IllegalArgumentException
+     *             if the provided view provider is <code>null</code>
      */
     public void addProvider(ViewProvider provider) {
+        if (provider == null) {
+            throw new IllegalArgumentException(
+                    "Cannot add a null view provider");
+        }
         providers.add(provider);
     }
 

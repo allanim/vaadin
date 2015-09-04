@@ -17,11 +17,12 @@ package com.vaadin.ui.declarative;
 
 import java.io.Serializable;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 import org.jsoup.nodes.Attributes;
 import org.jsoup.nodes.Document;
@@ -31,6 +32,8 @@ import org.jsoup.nodes.Node;
 import com.vaadin.annotations.DesignRoot;
 import com.vaadin.ui.Component;
 import com.vaadin.ui.HasComponents;
+import com.vaadin.ui.declarative.Design.ComponentFactory;
+import com.vaadin.ui.declarative.Design.ComponentMapper;
 
 /**
  * This class contains contextual information that is collected when a component
@@ -44,8 +47,7 @@ import com.vaadin.ui.HasComponents;
 public class DesignContext implements Serializable {
 
     // cache for object instances
-    private static Map<Class<?>, Component> instanceCache = Collections
-            .synchronizedMap(new HashMap<Class<?>, Component>());
+    private static Map<Class<?>, Component> instanceCache = new ConcurrentHashMap<Class<?>, Component>();
 
     // The root component of the component hierarchy
     private Component rootComponent = null;
@@ -73,13 +75,15 @@ public class DesignContext implements Serializable {
     // component creation listeners
     private List<ComponentCreationListener> listeners = new ArrayList<ComponentCreationListener>();
 
+    private ShouldWriteDataDelegate shouldWriteDataDelegate = ShouldWriteDataDelegate.DEFAULT;
+
     public DesignContext(Document doc) {
         this.doc = doc;
         // Initialize the mapping between prefixes and package names.
         defaultPrefixes.put("v", "com.vaadin.ui");
         for (String prefix : defaultPrefixes.keySet()) {
             String packageName = defaultPrefixes.get(prefix);
-            mapPrefixToPackage(prefix, packageName);
+            addPackagePrefix(prefix, packageName);
         }
     }
 
@@ -167,17 +171,34 @@ public class DesignContext implements Serializable {
      * component was mapped to some string s different from localId, the mapping
      * from s to component is removed.
      * 
-     * @param localId
-     *            The new local id of the component.
+     * @since 7.5.0
+     * 
      * @param component
      *            The component whose local id is to be set.
+     * @param localId
+     *            The new local id of the component.
+     * 
      * @return true, if there already was a local id mapping from the string to
      *         some component or from the component to some string. Otherwise
      *         returns false.
      */
-    private boolean mapLocalId(String localId, Component component) {
+    public boolean setComponentLocalId(Component component, String localId) {
         return twoWayMap(localId, component, localIdToComponent,
                 componentToLocalId);
+    }
+
+    /**
+     * Returns the local id for a component.
+     * 
+     * @since 7.5.0
+     * 
+     * @param component
+     *            The component whose local id to get.
+     * @return the local id of the component, or null if the component has no
+     *         local id assigned
+     */
+    public String getComponentLocalId(Component component) {
+        return componentToLocalId.get(component);
     }
 
     /**
@@ -236,20 +257,65 @@ public class DesignContext implements Serializable {
     }
 
     /**
-     * Creates a two-way mapping between a prefix and a package name. Return
-     * true if prefix was already mapped to some package name or packageName to
-     * some prefix.
+     * Creates a two-way mapping between a prefix and a package name.
      * 
      * @param prefix
      *            the prefix name without an ending dash (for instance, "v" is
-     *            always used for "com.vaadin.ui")
+     *            by default used for "com.vaadin.ui")
      * @param packageName
      *            the name of the package corresponding to prefix
-     * @return whether there was a mapping from prefix to some package name or
-     *         from packageName to some prefix.
+     * 
+     * @see #getPackagePrefixes()
+     * @see #getPackagePrefix(String)
+     * @see #getPackage(String)
+     * @since 7.5.0
      */
-    private boolean mapPrefixToPackage(String prefix, String packageName) {
-        return twoWayMap(prefix, packageName, prefixToPackage, packageToPrefix);
+    public void addPackagePrefix(String prefix, String packageName) {
+        twoWayMap(prefix, packageName, prefixToPackage, packageToPrefix);
+    }
+
+    /**
+     * Gets the prefix mapping for a given package, or <code>null</code> if
+     * there is no mapping for the package.
+     * 
+     * @see #addPackagePrefix(String, String)
+     * @see #getPackagePrefixes()
+     * 
+     * @since 7.5.0
+     * @param packageName
+     *            the package name to get a prefix for
+     * @return the prefix for the package, or <code>null</code> if no prefix is
+     *         registered
+     */
+    public String getPackagePrefix(String packageName) {
+        return packageToPrefix.get(packageName);
+    }
+
+    /**
+     * Gets all registered package prefixes.
+     * 
+     * 
+     * @since 7.5.0
+     * @see #getPackage(String)
+     * @return a collection of package prefixes
+     */
+    public Collection<String> getPackagePrefixes() {
+        return Collections.unmodifiableCollection(prefixToPackage.keySet());
+    }
+
+    /**
+     * Gets the package corresponding to the give prefix, or <code>null</code>
+     * no package has been registered for the prefix
+     * 
+     * @since 7.5.0
+     * @see #addPackagePrefix(String, String)
+     * @param prefix
+     *            the prefix to find a package for
+     * @return the package prefix, or <code>null</code> if no package is
+     *         registered for the provided prefix
+     */
+    public String getPackage(String prefix) {
+        return prefixToPackage.get(prefix);
     }
 
     /**
@@ -278,16 +344,8 @@ public class DesignContext implements Serializable {
             Class<? extends Component> componentClass) {
         Component instance = instanceCache.get(componentClass);
         if (instance == null) {
-            try {
-                instance = componentClass.newInstance();
-                instanceCache.put(componentClass, instance);
-            } catch (InstantiationException e) {
-                throw new RuntimeException("Could not instantiate "
-                        + componentClass.getName());
-            } catch (IllegalAccessException e) {
-                throw new RuntimeException("Could not instantiate "
-                        + componentClass.getName());
-            }
+            instance = instantiateClass(componentClass.getName());
+            instanceCache.put(componentClass, instance);
         }
         return instance;
     }
@@ -317,8 +375,7 @@ public class DesignContext implements Serializable {
                         }
                         String prefixName = parts[0];
                         String packageName = parts[1];
-                        twoWayMap(prefixName, packageName, prefixToPackage,
-                                packageToPrefix);
+                        addPackagePrefix(prefixName, packageName);
                     }
                 }
             }
@@ -336,14 +393,13 @@ public class DesignContext implements Serializable {
      */
     public void writePackageMappings(Document doc) {
         Element head = doc.head();
-        for (String prefix : prefixToPackage.keySet()) {
+        for (String prefix : getPackagePrefixes()) {
             // Only store the prefix-name mapping if it is not a default mapping
             // (such as "v" -> "com.vaadin.ui")
             if (defaultPrefixes.get(prefix) == null) {
                 Node newNode = doc.createElement("meta");
                 newNode.attr("name", "package-mapping");
-                String prefixToPackageName = prefix + ":"
-                        + prefixToPackage.get(prefix);
+                String prefixToPackageName = prefix + ":" + getPackage(prefix);
                 newNode.attr("content", prefixToPackageName);
                 head.appendChild(newNode);
             }
@@ -363,17 +419,11 @@ public class DesignContext implements Serializable {
      *         childComponent.
      */
     public Element createElement(Component childComponent) {
-        Class<?> componentClass = childComponent.getClass();
-        String packageName = componentClass.getPackage().getName();
-        String prefix = packageToPrefix.get(packageName);
-        if (prefix == null) {
-            prefix = packageName.replace('.', '_');
-            twoWayMap(prefix, packageName, prefixToPackage, packageToPrefix);
-        }
-        prefix = prefix + "-";
-        String className = classNameToElementName(componentClass
-                .getSimpleName());
-        Element newElement = doc.createElement(prefix + className);
+        ComponentMapper componentMapper = Design.getComponentMapper();
+
+        String tagName = componentMapper.componentToTag(childComponent, this);
+
+        Element newElement = doc.createElement(tagName);
         childComponent.writeDesign(newElement, this);
         // Handle the local id. Global id and caption should have been taken
         // care of by writeDesign.
@@ -382,32 +432,6 @@ public class DesignContext implements Serializable {
             newElement.attr(LOCAL_ID_ATTRIBUTE, localId);
         }
         return newElement;
-    }
-
-    /**
-     * Creates the name of the html tag corresponding to the given class name.
-     * The name is derived by converting each uppercase letter to lowercase and
-     * inserting a dash before the letter. No dash is inserted before the first
-     * letter of the class name.
-     * 
-     * @param className
-     *            the name of the class without a package name
-     * @return the html tag name corresponding to className
-     */
-    private String classNameToElementName(String className) {
-        StringBuilder result = new StringBuilder();
-        for (int i = 0; i < className.length(); i++) {
-            Character c = className.charAt(i);
-            if (Character.isUpperCase(c)) {
-                if (i > 0) {
-                    result.append("-");
-                }
-                result.append(Character.toLowerCase(c));
-            } else {
-                result.append(c);
-            }
-        }
-        return result.toString();
     }
 
     /**
@@ -459,7 +483,7 @@ public class DesignContext implements Serializable {
         // from the attributes of componentDesign
         if (attributes.hasKey(LOCAL_ID_ATTRIBUTE)) {
             String localId = attributes.get(LOCAL_ID_ATTRIBUTE);
-            boolean mappingExists = mapLocalId(localId, component);
+            boolean mappingExists = setComponentLocalId(component, localId);
             if (mappingExists) {
                 throw new DesignException(
                         "the following local id is not unique: " + localId);
@@ -481,95 +505,35 @@ public class DesignContext implements Serializable {
      * @return a Component corresponding to node, with no attributes set.
      */
     private Component instantiateComponent(Node node) {
-        // Extract the package and class names.
-        String qualifiedClassName = tagNameToClassName(node);
-        try {
-            Class<? extends Component> componentClass = resolveComponentClass(qualifiedClassName);
-            Component newComponent = componentClass.newInstance();
-            return newComponent;
-        } catch (Exception e) {
-            throw new DesignException("No component class could be found for "
-                    + node.nodeName() + ".", e);
-        }
+        String tag = node.nodeName();
+
+        ComponentMapper componentMapper = Design.getComponentMapper();
+        Component component = componentMapper.tagToComponent(tag,
+                Design.getComponentFactory(), this);
+
+        assert tag.equals(componentMapper.componentToTag(component, this));
+
+        return component;
     }
 
     /**
-     * Returns the qualified class name corresponding to the given html tree
-     * node. The class name is extracted from the tag name of node.
+     * Instantiates given class via ComponentFactory.
      * 
-     * @param node
-     *            an html tree node
-     * @return The qualified class name corresponding to the given node.
+     * @param qualifiedClassName
+     *            class name to instantiate
+     * @return instance of a given class
      */
-    private String tagNameToClassName(Node node) {
-        String tagName = node.nodeName();
-        if (tagName.equals("v-addon")) {
-            return node.attr("class");
-        }
-        // Otherwise, get the full class name using the prefix to package
-        // mapping. Example: "v-vertical-layout" ->
-        // "com.vaadin.ui.VerticalLayout"
-        String[] parts = tagName.split("-");
-        if (parts.length < 2) {
-            throw new DesignException("The tagname '" + tagName
-                    + "' is invalid: missing prefix.");
-        }
-        String prefixName = parts[0];
-        String packageName = prefixToPackage.get(prefixName);
-        if (packageName == null) {
-            throw new DesignException("Unknown tag: " + tagName);
-        }
-        int firstCharacterIndex = prefixName.length() + 1; // +1 is for '-'
-        tagName = tagName.substring(firstCharacterIndex,
-                firstCharacterIndex + 1).toUpperCase(Locale.ENGLISH)
-                + tagName.substring(firstCharacterIndex + 1);
-        int i;
-        while ((i = tagName.indexOf("-")) != -1) {
-            int length = tagName.length();
-            if (i != length - 1) {
-                tagName = tagName.substring(0, i)
-                        + tagName.substring(i + 1, i + 2).toUpperCase(
-                                Locale.ENGLISH) + tagName.substring(i + 2);
+    private Component instantiateClass(String qualifiedClassName) {
+        ComponentFactory factory = Design.getComponentFactory();
+        Component component = factory.createComponent(qualifiedClassName, this);
 
-            } else {
-                // Ends with "-"
-                System.out.println("A tag name should not end with '-'.");
-            }
+        if (component == null) {
+            throw new DesignException("Got unexpected null component from "
+                    + factory.getClass().getName() + " for class "
+                    + qualifiedClassName);
         }
-        return packageName + "." + tagName;
-    }
 
-    @SuppressWarnings("unchecked")
-    private Class<? extends Component> resolveComponentClass(
-            String qualifiedClassName) throws ClassNotFoundException {
-        Class<?> componentClass = null;
-        componentClass = Class.forName(qualifiedClassName);
-
-        // Check that we're dealing with a Component.
-        if (isComponent(componentClass)) {
-            return (Class<? extends Component>) componentClass;
-        } else {
-            throw new IllegalArgumentException(String.format(
-                    "Resolved class %s is not a %s.", componentClass.getName(),
-                    Component.class.getName()));
-        }
-    }
-
-    /**
-     * Returns {@code true} if the given {@link Class} implements the
-     * {@link Component} interface of Vaadin Framework otherwise {@code false}.
-     * 
-     * @param componentClass
-     *            {@link Class} to check against {@link Component} interface.
-     * @return {@code true} if the given {@link Class} is a {@link Component},
-     *         {@code false} otherwise.
-     */
-    private static boolean isComponent(Class<?> componentClass) {
-        if (componentClass != null) {
-            return Component.class.isAssignableFrom(componentClass);
-        } else {
-            return false;
-        }
+        return component;
     }
 
     /**
@@ -716,4 +680,56 @@ public class DesignContext implements Serializable {
 
         return true;
     }
+
+    /**
+     * Determines whether the container data of a component should be written
+     * out by delegating to a {@link ShouldWriteDataDelegate}. The default
+     * delegate assumes that all component data is provided by a data source
+     * connected to a back end system and that the data should thus not be
+     * written.
+     * 
+     * @since 7.5.0
+     * @see #setShouldWriteDataDelegate(ShouldWriteDataDelegate)
+     * @param component
+     *            the component to check
+     * @return <code>true</code> if container data should be written out for the
+     *         provided component; otherwise <code>false</code>.
+     */
+    public boolean shouldWriteData(Component component) {
+        return getShouldWriteDataDelegate().shouldWriteData(component);
+    }
+
+    /**
+     * Sets the delegate that determines whether the container data of a
+     * component should be written out.
+     * 
+     * @since 7.5.0
+     * @see #shouldWriteChildren(Component, Component)
+     * @see #getShouldWriteDataDelegate()
+     * @param shouldWriteDataDelegate
+     *            the delegate to set, not <code>null</code>
+     * @throws IllegalArgumentException
+     *             if the provided delegate is <code>null</code>
+     */
+    public void setShouldWriteDataDelegate(
+            ShouldWriteDataDelegate shouldWriteDataDelegate) {
+        if (shouldWriteDataDelegate == null) {
+            throw new IllegalArgumentException("Delegate cannot be null");
+        }
+        this.shouldWriteDataDelegate = shouldWriteDataDelegate;
+    }
+
+    /**
+     * Gets the delegate that determines whether the container data of a
+     * component should be written out.
+     * 
+     * @since 7.5.0
+     * @see #setShouldWriteDataDelegate(ShouldWriteDataDelegate)
+     * @see #shouldWriteChildren(Component, Component)
+     * @return the shouldWriteDataDelegate the currently use delegate
+     */
+    public ShouldWriteDataDelegate getShouldWriteDataDelegate() {
+        return shouldWriteDataDelegate;
+    }
+
 }

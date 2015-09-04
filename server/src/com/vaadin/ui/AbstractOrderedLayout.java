@@ -477,11 +477,9 @@ public abstract class AbstractOrderedLayout extends AbstractLayout implements
     public void readDesign(Element design, DesignContext designContext) {
         // process default attributes
         super.readDesign(design, designContext);
-        // handle margin
-        if (design.hasAttr("margin")) {
-            setMargin(DesignAttributeHandler.readAttribute("margin",
-                    design.attributes(), Boolean.class));
-        }
+
+        setMargin(readMargin(design, getMargin(), designContext));
+
         // handle children
         for (Element childComponent : design.children()) {
             Attributes attr = childComponent.attributes();
@@ -532,12 +530,12 @@ public abstract class AbstractOrderedLayout extends AbstractLayout implements
     public void writeDesign(Element design, DesignContext designContext) {
         // write default attributes
         super.writeDesign(design, designContext);
-        // handle margin
+
         AbstractOrderedLayout def = (AbstractOrderedLayout) designContext
                 .getDefaultInstance(this);
-        if (getMargin().getBitMask() != def.getMargin().getBitMask()) {
-            design.attr("margin", "");
-        }
+
+        writeMargin(design, getMargin(), def.getMargin(), designContext);
+
         // handle children
         if (!designContext.shouldWriteChildren(this, def)) {
             return;
@@ -563,8 +561,8 @@ public abstract class AbstractOrderedLayout extends AbstractLayout implements
             if (expandRatio == 1.0f) {
                 childElement.attr(":expand", "");
             } else if (expandRatio > 0) {
-                childElement.attr(":expand",
-                        DesignAttributeHandler.formatFloat(expandRatio));
+                childElement.attr(":expand", DesignAttributeHandler
+                        .getFormatter().format(expandRatio));
             }
         }
     }
@@ -578,6 +576,10 @@ public abstract class AbstractOrderedLayout extends AbstractLayout implements
     protected Collection<String> getCustomAttributes() {
         Collection<String> customAttributes = super.getCustomAttributes();
         customAttributes.add("margin");
+        customAttributes.add("margin-left");
+        customAttributes.add("margin-right");
+        customAttributes.add("margin-top");
+        customAttributes.add("margin-bottom");
         return customAttributes;
     }
 

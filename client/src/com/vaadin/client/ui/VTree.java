@@ -60,6 +60,7 @@ import com.vaadin.client.ConnectorMap;
 import com.vaadin.client.MouseEventDetailsBuilder;
 import com.vaadin.client.UIDL;
 import com.vaadin.client.Util;
+import com.vaadin.client.WidgetUtil;
 import com.vaadin.client.ui.aria.AriaHelper;
 import com.vaadin.client.ui.aria.HandlesAriaCaption;
 import com.vaadin.client.ui.dd.DDUtil;
@@ -178,7 +179,7 @@ public class VTree extends FocusElementPanel implements VHasDropHandler,
 
                 @Override
                 public void execute() {
-                    Util.notifyParentOfSizeChange(VTree.this, true);
+                    doLayout();
                 }
 
             });
@@ -346,7 +347,7 @@ public class VTree extends FocusElementPanel implements VHasDropHandler,
     }
 
     private String findCurrentMouseOverKey(Element elementOver) {
-        TreeNode treeNode = Util.findWidget(elementOver, TreeNode.class);
+        TreeNode treeNode = WidgetUtil.findWidget(elementOver, TreeNode.class);
         return treeNode == null ? null : treeNode.key;
     }
 
@@ -968,7 +969,7 @@ public class VTree extends FocusElementPanel implements VHasDropHandler,
             open = state;
 
             if (!rendering) {
-                Util.notifyParentOfSizeChange(VTree.this, false);
+                doLayout();
             }
         }
 
@@ -1132,7 +1133,7 @@ public class VTree extends FocusElementPanel implements VHasDropHandler,
          * Scrolls the caption into view
          */
         public void scrollIntoView() {
-            Util.scrollIntoViewVertically(nodeCaptionDiv);
+            WidgetUtil.scrollIntoViewVertically(nodeCaptionDiv);
         }
 
         public void setIcon(String iconUrl, String altText) {
@@ -1736,8 +1737,8 @@ public class VTree extends FocusElementPanel implements VHasDropHandler,
                         selectNode(node, true);
                     }
                 }
+                showTooltipForKeyboardNavigation(node);
             }
-            showTooltipForKeyboardNavigation(node);
             return true;
         }
 
@@ -1762,8 +1763,8 @@ public class VTree extends FocusElementPanel implements VHasDropHandler,
                         selectNode(node, true);
                     }
                 }
+                showTooltipForKeyboardNavigation(node);
             }
-            showTooltipForKeyboardNavigation(node);
             return true;
         }
 
@@ -2143,7 +2144,7 @@ public class VTree extends FocusElementPanel implements VHasDropHandler,
             return "fe";
         }
 
-        TreeNode treeNode = Util.findWidget(subElement, TreeNode.class);
+        TreeNode treeNode = WidgetUtil.findWidget(subElement, TreeNode.class);
         if (treeNode == null) {
             // Did not click on a node, let somebody else take care of the
             // locator string
@@ -2237,5 +2238,16 @@ public class VTree extends FocusElementPanel implements VHasDropHandler,
     public void bindAriaCaption(
             com.google.gwt.user.client.Element captionElement) {
         AriaHelper.bindCaption(body, captionElement);
+    }
+
+    /**
+     * Tell LayoutManager that a layout is needed later for this VTree
+     */
+    private void doLayout() {
+        // IE8 needs a hack to measure the tree again after update
+        WidgetUtil.forceIE8Redraw(getElement());
+
+        // This calls LayoutManager setNeedsMeasure and layoutNow
+        Util.notifyParentOfSizeChange(this, false);
     }
 }

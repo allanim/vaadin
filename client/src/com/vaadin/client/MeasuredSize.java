@@ -15,6 +15,8 @@
  */
 package com.vaadin.client;
 
+import java.util.logging.Logger;
+
 import com.google.gwt.core.client.JsArrayString;
 import com.google.gwt.dom.client.Element;
 
@@ -43,8 +45,8 @@ public class MeasuredSize {
         }
     }
 
-    private int width = -1;
-    private int height = -1;
+    private double width = -1;
+    private double height = -1;
 
     private int[] paddings = new int[4];
     private int[] borders = new int[4];
@@ -52,11 +54,11 @@ public class MeasuredSize {
 
     private FastStringSet dependents = FastStringSet.create();
 
-    public int getOuterHeight() {
+    public double getOuterHeight() {
         return height;
     }
 
-    public int getOuterWidth() {
+    public double getOuterWidth() {
         return width;
     }
 
@@ -84,17 +86,17 @@ public class MeasuredSize {
         return sizes[0] + sizes[2];
     }
 
-    public int getInnerHeight() {
+    public double getInnerHeight() {
         return height - sumHeights(margins) - sumHeights(borders)
                 - sumHeights(paddings);
     }
 
-    public int getInnerWidth() {
+    public double getInnerWidth() {
         return width - sumWidths(margins) - sumWidths(borders)
                 - sumWidths(paddings);
     }
 
-    public boolean setOuterHeight(int height) {
+    public boolean setOuterHeight(double height) {
         if (this.height != height) {
             this.height = height;
             return true;
@@ -103,7 +105,7 @@ public class MeasuredSize {
         }
     }
 
-    public boolean setOuterWidth(int width) {
+    public boolean setOuterWidth(double width) {
         if (this.width != width) {
             this.width = width;
             return true;
@@ -236,20 +238,20 @@ public class MeasuredSize {
         Profiler.leave("Measure borders");
 
         Profiler.enter("Measure height");
-        int requiredHeight = Util.getRequiredHeight(element);
-        int marginHeight = sumHeights(margins);
-        int oldHeight = height;
-        int oldWidth = width;
-        if (setOuterHeight(requiredHeight + marginHeight)) {
+        double requiredHeight = WidgetUtil.getRequiredHeightDouble(element);
+        double outerHeight = requiredHeight + sumHeights(margins);
+        double oldHeight = height;
+        if (setOuterHeight(outerHeight)) {
             debugSizeChange(element, "Height (outer)", oldHeight, height);
             heightChanged = true;
         }
         Profiler.leave("Measure height");
 
         Profiler.enter("Measure width");
-        int requiredWidth = Util.getRequiredWidth(element);
-        int marginWidth = sumWidths(margins);
-        if (setOuterWidth(requiredWidth + marginWidth)) {
+        double requiredWidth = WidgetUtil.getRequiredWidthDouble(element);
+        double outerWidth = requiredWidth + sumWidths(margins);
+        double oldWidth = width;
+        if (setOuterWidth(outerWidth)) {
             debugSizeChange(element, "Width (outer)", oldWidth, width);
             widthChanged = true;
         }
@@ -268,7 +270,7 @@ public class MeasuredSize {
     }
 
     private void debugSizeChange(Element element, String sizeChangeType,
-            int changedFrom, int changedTo) {
+            double changedFrom, double changedTo) {
         debugSizeChange(element, sizeChangeType, String.valueOf(changedFrom),
                 String.valueOf(changedTo));
     }
@@ -276,8 +278,9 @@ public class MeasuredSize {
     private void debugSizeChange(Element element, String sizeChangeType,
             String changedFrom, String changedTo) {
         if (debugSizeChanges) {
-            VConsole.log(sizeChangeType + " has changed from " + changedFrom
-                    + " to " + changedTo + " for " + element.toString());
+            getLogger()
+                    .info(sizeChangeType + " has changed from " + changedFrom
+                            + " to " + changedTo + " for " + element.toString());
         }
     }
 
@@ -287,6 +290,10 @@ public class MeasuredSize {
 
     private static boolean hasHeightChanged(int[] sizes1, int[] sizes2) {
         return sizes1[0] != sizes2[0] || sizes1[2] != sizes2[2];
+    }
+
+    private static Logger getLogger() {
+        return Logger.getLogger(MeasuredSize.class.getName());
     }
 
 }

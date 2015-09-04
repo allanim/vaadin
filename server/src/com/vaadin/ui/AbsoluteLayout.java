@@ -724,7 +724,7 @@ public class AbsoluteLayout extends AbstractLayout implements
         for (Component child : this) {
             Element childElement = designContext.createElement(child);
             design.appendChild(childElement);
-            child.writeDesign(childElement, designContext);
+
             // handle position
             ComponentPosition position = getPosition(child);
             writePositionAttribute(childElement, ATTR_TOP, position
@@ -735,6 +735,7 @@ public class AbsoluteLayout extends AbstractLayout implements
                     .getBottomUnits().getSymbol(), position.getBottomValue());
             writePositionAttribute(childElement, ATTR_LEFT, position
                     .getLeftUnits().getSymbol(), position.getLeftValue());
+
             // handle z-index
             if (position.getZIndex() >= 0) {
                 childElement
@@ -746,7 +747,7 @@ public class AbsoluteLayout extends AbstractLayout implements
     /**
      * Private method for writing position attributes
      * 
-     * @since
+     * @since 7.4
      * @param node
      *            target node
      * @param key
@@ -759,8 +760,8 @@ public class AbsoluteLayout extends AbstractLayout implements
     private void writePositionAttribute(Node node, String key, String symbol,
             Float value) {
         if (value != null) {
-            String valueString = DesignAttributeHandler.formatFloat(value
-                    .floatValue());
+            String valueString = DesignAttributeHandler.getFormatter().format(
+                    value);
             node.attr(key, valueString + symbol);
         }
     }

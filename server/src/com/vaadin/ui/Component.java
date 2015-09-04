@@ -149,8 +149,8 @@ public interface Component extends ClientConnector, Sizeable, Serializable {
      * 
      * <p>
      * Each style name will occur in two versions: one as specified and one that
-     * is prefixed wil the style name of the component. For example, if you have
-     * a {@code Button} component and give it "{@code mystyle}" style, the
+     * is prefixed with the style name of the component. For example, if you
+     * have a {@code Button} component and give it "{@code mystyle}" style, the
      * component will have both "{@code mystyle}" and "{@code v-button-mystyle}"
      * styles. You could then style the component either with:
      * </p>
@@ -253,9 +253,10 @@ public interface Component extends ClientConnector, Sizeable, Serializable {
     public boolean isEnabled();
 
     /**
-     * Enables or disables the component. The user can not interact disabled
-     * components, which are shown with a style that indicates the status,
-     * usually shaded in light gray color. Components are enabled by default.
+     * Enables or disables the component. The user can not interact with
+     * disabled components, which are shown with a style that indicates the
+     * status, usually shaded in light gray color. Components are enabled by
+     * default.
      * 
      * <pre>
      * Button enabled = new Button(&quot;Enabled&quot;);
@@ -746,7 +747,7 @@ public interface Component extends ClientConnector, Sizeable, Serializable {
      * 
      * @since 7.4
      * @param design
-     *            The design as HTML to obtain the state from
+     *            The element to obtain the state from
      * @param designContext
      *            The DesignContext instance used for parsing the design
      */
@@ -762,8 +763,11 @@ public interface Component extends ClientConnector, Sizeable, Serializable {
      * 
      * @since 7.4
      * @param design
-     *            The design as HTML to update with the current state
+     *            The element to write the component state to. Any previous
+     *            attributes or child nodes are <i>not</i> cleared.
      * @param designContext
+     *            The DesignContext instance used for writing the design
+     * 
      */
     public void writeDesign(Element design, DesignContext designContext);
 
@@ -909,7 +913,7 @@ public interface Component extends ClientConnector, Sizeable, Serializable {
          * </pre>
          * 
          * @param event
-         *            the event that has occured.
+         *            the event that has occurred.
          */
         public void componentEvent(Component.Event event);
     }

@@ -59,6 +59,7 @@ import com.vaadin.client.ResourceLoader.ResourceLoadEvent;
 import com.vaadin.client.ResourceLoader.ResourceLoadListener;
 import com.vaadin.client.ServerConnector;
 import com.vaadin.client.UIDL;
+import com.vaadin.client.Util;
 import com.vaadin.client.VConsole;
 import com.vaadin.client.ValueMap;
 import com.vaadin.client.annotations.OnStateChange;
@@ -71,11 +72,13 @@ import com.vaadin.client.ui.ShortcutActionHandler;
 import com.vaadin.client.ui.VNotification;
 import com.vaadin.client.ui.VOverlay;
 import com.vaadin.client.ui.VUI;
+import com.vaadin.client.ui.VWindow;
 import com.vaadin.client.ui.layout.MayScrollChildren;
 import com.vaadin.client.ui.window.WindowConnector;
 import com.vaadin.server.Page.Styles;
 import com.vaadin.shared.ApplicationConstants;
 import com.vaadin.shared.MouseEventDetails;
+import com.vaadin.shared.Version;
 import com.vaadin.shared.communication.MethodInvocation;
 import com.vaadin.shared.ui.ComponentStateUtil;
 import com.vaadin.shared.ui.Connect;
@@ -318,19 +321,19 @@ public class UIConnector extends AbstractSingleComponentContainerConnector
             Scheduler.get().scheduleDeferred(new Command() {
                 @Override
                 public void execute() {
-                    ComponentConnector paintable = (ComponentConnector) uidl
+                    ComponentConnector connector = (ComponentConnector) uidl
                             .getPaintableAttribute("focused", getConnection());
 
-                    if (paintable == null) {
+                    if (connector == null) {
                         // Do not try to focus invisible components which not
                         // present in UIDL
                         return;
                     }
 
-                    final Widget toBeFocused = paintable.getWidget();
+                    final Widget toBeFocused = connector.getWidget();
                     /*
                      * Two types of Widgets can be focused, either implementing
-                     * GWT HasFocus of a thinner Vaadin specific Focusable
+                     * GWT Focusable of a thinner Vaadin specific Focusable
                      * interface.
                      */
                     if (toBeFocused instanceof com.google.gwt.user.client.ui.Focusable) {
@@ -339,7 +342,14 @@ public class UIConnector extends AbstractSingleComponentContainerConnector
                     } else if (toBeFocused instanceof Focusable) {
                         ((Focusable) toBeFocused).focus();
                     } else {
-                        VConsole.log("Could not focus component");
+                        getLogger()
+                                .severe("Server is trying to set focus to the widget of connector "
+                                        + Util.getConnectorString(connector)
+                                        + " but it is not focusable. The widget should implement either "
+                                        + com.google.gwt.user.client.ui.Focusable.class
+                                                .getName()
+                                        + " or "
+                                        + Focusable.class.getName());
                     }
                 }
             });
@@ -668,6 +678,19 @@ public class UIConnector extends AbstractSingleComponentContainerConnector
             if (c instanceof WindowConnector) {
                 WindowConnector wc = (WindowConnector) c;
                 wc.setWindowOrderAndPosition();
+                VWindow window = wc.getWidget();
+                if (!window.isAttached()) {
+
+                    // Attach so that all widgets inside the Window are attached
+                    // when their onStateChange is run
+
+                    // Made invisible here for legacy reasons and made visible
+                    // at the end of stateChange. This dance could probably be
+                    // removed
+                    window.setVisible(false);
+                    window.show();
+                }
+
             }
         }
 
@@ -809,6 +832,18 @@ public class UIConnector extends AbstractSingleComponentContainerConnector
                 serverConnector);
     }
 
+    /**
+     * Sends a request to the server to print a design to the console for the
+     * given component.
+     * 
+     * @since 7.5
+     * @param connector
+     *            the component connector to output a declarative design for
+     */
+    public void showServerDesign(ServerConnector connector) {
+        getRpcProxy(DebugWindowServerRpc.class).showServerDesign(connector);
+    }
+
     @OnStateChange("theme")
     void onThemeChange() {
         final String oldTheme = activeTheme;
@@ -846,6 +881,7 @@ public class UIConnector extends AbstractSingleComponentContainerConnector
     /**
      * Loads the new theme and removes references to the old theme
      * 
+     * @since 7.4.3
      * @param oldTheme
      *            The name of the old theme
      * @param newTheme
@@ -855,7 +891,7 @@ public class UIConnector extends AbstractSingleComponentContainerConnector
      * @param newThemeUrl
      *            The url of the new theme
      */
-    private void replaceTheme(final String oldTheme, final String newTheme,
+    protected void replaceTheme(final String oldTheme, final String newTheme,
             String oldThemeUrl, final String newThemeUrl) {
 
         LinkElement tagToReplace = null;
@@ -884,6 +920,26 @@ public class UIConnector extends AbstractSingleComponentContainerConnector
         }
 
     }
+
+    private void updateVaadinFavicon(String newTheme) {
+        NodeList<Element> iconElements = querySelectorAll("link[rel~=\"icon\"]");
+        for (int i = 0; i < iconElements.getLength(); i++) {
+            Element iconElement = iconElements.getItem(i);
+
+            String href = iconElement.getAttribute("href");
+            if (href != null && href.contains("VAADIN/themes")
+                    && href.endsWith("/favicon.ico")) {
+                href = href.replaceFirst("VAADIN/themes/.+?/favicon.ico",
+                        "VAADIN/themes/" + newTheme + "/favicon.ico");
+                iconElement.setAttribute("href", href);
+            }
+        }
+    }
+
+    private static native NodeList<Element> querySelectorAll(String selector)
+    /*-{
+        return $doc.querySelectorAll(selector);
+    }-*/;
 
     /**
      * Finds a link tag for a style sheet with the given URL
@@ -960,15 +1016,18 @@ public class UIConnector extends AbstractSingleComponentContainerConnector
      * Activates the new theme. Assumes the theme has been loaded and taken into
      * use in the browser.
      * 
-     * @since 7.3
+     * @since 7.4.3
      * @param newTheme
+     *            The name of the new theme
      */
-    private void activateTheme(String newTheme) {
+    protected void activateTheme(String newTheme) {
         if (activeTheme != null) {
             getWidget().getParent().removeStyleName(activeTheme);
             VOverlay.getOverlayContainer(getConnection()).removeClassName(
                     activeTheme);
         }
+
+        String oldThemeBase = getConnection().translateVaadinUri("theme://");
 
         activeTheme = newTheme;
 
@@ -976,8 +1035,16 @@ public class UIConnector extends AbstractSingleComponentContainerConnector
             getWidget().getParent().addStyleName(newTheme);
             VOverlay.getOverlayContainer(getConnection()).addClassName(
                     activeTheme);
+
+            updateVaadinFavicon(newTheme);
+
         }
 
+        // Request a full resynchronization from the server to deal with legacy
+        // components
+        getConnection().repaintAll();
+
+        // Immediately update state and do layout while waiting for the resync
         forceStateChangeRecursively(UIConnector.this);
         getLayoutManager().forceLayout();
     }
@@ -1014,9 +1081,13 @@ public class UIConnector extends AbstractSingleComponentContainerConnector
      * @return The URL the theme can be loaded from
      */
     private String getThemeUrl(String theme) {
-        return getConnection().translateVaadinUri(
+        String themeUrl = getConnection().translateVaadinUri(
                 ApplicationConstants.VAADIN_PROTOCOL_PREFIX + "themes/" + theme
                         + "/styles" + ".css");
+        // Parameter appended to bypass caches after version upgrade.
+        themeUrl += "?v=" + Version.getFullVersion();
+        return themeUrl;
+
     }
 
     /**
@@ -1032,5 +1103,4 @@ public class UIConnector extends AbstractSingleComponentContainerConnector
     private static Logger getLogger() {
         return Logger.getLogger(UIConnector.class.getName());
     }
-
 }

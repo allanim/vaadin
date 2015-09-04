@@ -27,6 +27,8 @@
     <!-- Base url where the testable application is deployed -->
     <property name="deployment.url" value="http://${test.integration.server}:8080" />
 
+    <!-- TestBench license parameter -->
+    <property name="vaadin.testbench.developer.license" value="" />
 
     <property name="report.dir" location="${integration_test.dir}/result/reports-integration" />
 
@@ -87,7 +89,7 @@
         <subant target="run-tb2-tests" failonerror="false" antfile="test.xml">
             <property name="com.vaadin.testbench.lib.dir" value="${com.vaadin.testbench.lib.dir}" />
             <property name="com.vaadin.testbench.tester.host" value="${com.vaadin.testbench.tester.host}" />
-            <property name="com.vaadin.testbench.deployment.url" value="http://vaadin-integration-test.appspot.com/" />
+            <property name="com.vaadin.testbench.deployment.url" value="http://vaadin-integration-test-hrd.appspot.com/" />
             <property name="server.start.succeeded" value="1" />
             <property name="browsers" value="${test_browsers}" />
             <property name="testfiles" value="${test-GAE}" />
@@ -124,6 +126,7 @@
             <jvmarg value="-Dserver-name=${server-name}" />
             <jvmarg value="-Djava.awt.headless=true" />
             <jvmarg value="-Ddemo.war=${demo.war}" />
+            <jvmarg value="-Dvaadin.testbench.developer.license=${vaadin.testbench.developer.license}" />
             <test name="${junit.test.suite}" todir="${server.report.dir}" />
         </junit>
     </target>
@@ -144,6 +147,13 @@
         <antcall target="run-generic-integration-test">
             <param name="startDelay" value="10" />
             <param name="target-server" value="tomcat8" />
+        </antcall>
+    </target>
+
+    <target name="integration-test-osgi">
+        <antcall target="run-generic-integration-test">
+            <param name="startDelay" value="10" />
+            <param name="target-server" value="osgi" />
         </antcall>
     </target>
 
@@ -214,7 +224,12 @@
             <param name="target-server" value="wildfly8" />
         </antcall>
     </target>
-
+    <target name="integration-test-wildfly9">
+        <antcall target="run-generic-integration-test">
+            <param name="startDelay" value="10" />
+            <param name="target-server" value="wildfly9" />
+        </antcall>
+    </target>
     <target name="integration-test-glassfish3">
         <antcall target="run-generic-integration-test">
             <param name="startDelay" value="10" />
@@ -266,31 +281,6 @@
         </antcall>
     </target>
 
-    <target name="integration-test-liferay6ee">
-        <fileset dir="integration-testscripts" id="html-test-files" includes="Liferay-6EE/integration-test-liferay-6ee.html" />
-        <pathconvert pathsep=" " property="testfiles" refid="html-test-files" />
-
-        <antcall target="run-generic-integration-test">
-            <param name="startDelay" value="600" />
-            <param name="test_browsers" value="winxp-firefox17-esr" />
-            <param name="target-server" value="liferay6ee" />
-        </antcall>
-    </target>
-
-    <target name="integration-test-liferay6ee-theme">
-        <fileset dir="integration-testscripts" id="html-test-files" includes="Liferay-6/Liferay6-and-6EE-theme-deploy.html" />
-        <pathconvert pathsep=" " property="testfiles" refid="html-test-files" />
-
-        <fileset dir="integration-testscripts" id="html-theme-files" includes="Liferay-6EE/Liferay6EE-theme.html" />
-        <pathconvert pathsep=" " property="testfiles-theme" refid="html-theme-files" />
-
-        <antcall target="run-generic-integration-test">
-            <param name="startDelay" value="600" />
-            <param name="test_browsers" value="winxp-firefox17-esr" />
-            <param name="target-server" value="liferay6ee" />
-        </antcall>
-    </target>
-
     <target name="integration-test-gatein3">
         <fileset dir="integration-testscripts" id="html-test-files" includes="GateIn-3/integration-test-GateIn-3.1.0-portlet2.html" />
         <pathconvert pathsep=" " property="testfiles" refid="html-test-files" />
@@ -298,16 +288,6 @@
             <param name="startDelay" value="600" />
             <param name="test_browsers" value="winxp-googlechrome21" />
             <param name="target-server" value="gatein3" />
-        </antcall>
-    </target>
-
-    <target name="integration-test-exo3">
-        <fileset dir="integration-testscripts" id="html-test-files" includes="eXo-3/integration-test-eXo-3.0.3-portlet2.html" />
-        <pathconvert pathsep=" " property="testfiles" refid="html-test-files" />
-        <antcall target="run-generic-integration-test">
-            <param name="startDelay" value="600" />
-            <param name="test_browsers" value="winxp-firefox17-esr" />
-            <param name="target-server" value="exo3" />
         </antcall>
     </target>
 
@@ -400,10 +380,7 @@
                 </catch>
             </antcontrib:trycatch>
             <antcall target="integration-test-liferay6" />
-            <antcall target="integration-test-liferay6ee" />
             <antcall target="integration-test-liferay6-theme" />
-            <antcall target="integration-test-liferay6ee-theme" />
-            <antcall target="integration-test-exo3" />
             <antcall target="integration-test-weblogicPortal" />
             <antcall target="integration-test-liferay5" />
             <antcall target="integration-test-weblogic10" />
@@ -417,15 +394,18 @@
             <antcall target="integration-test-jboss7" />
             <antcall target="integration-test-jboss-eap6" />
             <antcall target="integration-test-wildfly8" />
+            <antcall target="integration-test-wildfly9" />
             <antcall target="integration-test-jetty7" />
             <antcall target="integration-test-jetty8" />
             <antcall target="integration-test-jetty9" />
             <antcall target="integration-test-tomcat6" />
             <antcall target="integration-test-tomcat7" />
             <antcall target="integration-test-tomcat8" />
+            <antcall target="integration-test-osgi" />
             <antcall target="integration-test-tomcat7apacheproxy" />
             <antcall target="integration-test-websphere8" />
-            <antcall target="integration-test-websphereportal8" />
+            <!-- Currently the test system does not have a server for automatic testing of WebSphere Portal 8 -->
+            <!-- <antcall target="integration-test-websphereportal8" /> -->
         </parallel>
 
     </target>

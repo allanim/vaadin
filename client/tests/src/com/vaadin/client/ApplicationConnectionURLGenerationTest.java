@@ -4,6 +4,8 @@ import static org.junit.Assert.assertEquals;
 
 import org.junit.Test;
 
+import com.vaadin.shared.util.SharedUtil;
+
 public class ApplicationConnectionURLGenerationTest {
 
     private static final String[] URIS = new String[] {
@@ -50,25 +52,22 @@ public class ApplicationConnectionURLGenerationTest {
     public void testParameterAdding() {
         for (int i = 0; i < URIS.length; i++) {
             // Adding nothing
-            assertEquals(URIS[i],
-                    ApplicationConnection.addGetParameters(URIS[i], ""));
+            assertEquals(URIS[i], SharedUtil.addGetParameters(URIS[i], ""));
 
             // Adding a=b&c=d
             assertEquals(URIS_WITH_ABCD_PARAM[i],
-                    ApplicationConnection.addGetParameters(URIS[i], "a=b&c=d"));
+                    SharedUtil.addGetParameters(URIS[i], "a=b&c=d"));
 
             // Fragments
             if (URIS_WITH_ABCD_PARAM_AND_FRAGMENT[i].length() > 0) {
-                assertEquals(
-                        URIS_WITH_ABCD_PARAM_AND_FRAGMENT[i],
-                        ApplicationConnection.addGetParameters(URIS[i]
-                                + "#fragment", "a=b&c=d"));
+                assertEquals(URIS_WITH_ABCD_PARAM_AND_FRAGMENT[i],
+                        SharedUtil.addGetParameters(URIS[i] + "#fragment",
+                                "a=b&c=d"));
 
                 // Empty fragment
                 assertEquals(URIS_WITH_ABCD_PARAM_AND_FRAGMENT[i].replace(
-                        "#fragment", "#"),
-                        ApplicationConnection.addGetParameters(URIS[i] + "#",
-                                "a=b&c=d"));
+                        "#fragment", "#"), SharedUtil.addGetParameters(URIS[i]
+                        + "#", "a=b&c=d"));
             }
         }
     }

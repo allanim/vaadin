@@ -43,12 +43,6 @@ import java.io.Serializable;
  * <li><b>internalErrorCaption</b> = "Internal error"</li>
  * <li><b>internalErrorMessage</b> = "Please notify the administrator.<br/>
  * Take note of any unsaved data, and <u>click here</u> to continue."</li>
- * <li><b>outOfSyncURL</b> = null</li>
- * <li><b>outOfSyncNotificationEnabled</b> = true</li>
- * <li><b>outOfSyncCaption</b> = "Out of sync"</li>
- * <li><b>outOfSyncMessage</b> = "Something has caused us to be out of sync with
- * the server.<br/>
- * Take note of any unsaved data, and <u>click here</u> to re-sync."</li>
  * <li><b>cookiesDisabledURL</b> = null</li>
  * <li><b>cookiesDisabledNotificationEnabled</b> = true</li>
  * <li><b>cookiesDisabledCaption</b> = "Cookies disabled"</li>
@@ -79,11 +73,6 @@ public class SystemMessages implements Serializable {
     protected boolean internalErrorNotificationEnabled = true;
     protected String internalErrorCaption = "Internal error";
     protected String internalErrorMessage = "Please notify the administrator.<br/>Take note of any unsaved data, and <u>click here</u> or press ESC to continue.";
-
-    protected String outOfSyncURL = null;
-    protected boolean outOfSyncNotificationEnabled = true;
-    protected String outOfSyncCaption = "Out of sync";
-    protected String outOfSyncMessage = "Something has caused us to be out of sync with the server.<br/>Take note of any unsaved data, and <u>click here</u> or press ESC to re-sync.";
 
     protected String cookiesDisabledURL = null;
     protected boolean cookiesDisabledNotificationEnabled = true;
@@ -221,35 +210,6 @@ public class SystemMessages implements Serializable {
      */
     public String getInternalErrorMessage() {
         return (internalErrorNotificationEnabled ? internalErrorMessage : null);
-    }
-
-    /**
-     * @return null to reload the application after out of sync message.
-     */
-    public String getOutOfSyncURL() {
-        return outOfSyncURL;
-    }
-
-    /**
-     * @return true to enable showing out of sync message
-     */
-    public boolean isOutOfSyncNotificationEnabled() {
-        return outOfSyncNotificationEnabled;
-    }
-
-    /**
-     * @return "Out of sync"
-     */
-    public String getOutOfSyncCaption() {
-        return (outOfSyncNotificationEnabled ? outOfSyncCaption : null);
-    }
-
-    /**
-     * @return "Something has caused us to be out of sync with the server.<br/>
-     *         Take note of any unsaved data, and <u>click here</u> to re-sync."
-     */
-    public String getOutOfSyncMessage() {
-        return (outOfSyncNotificationEnabled ? outOfSyncMessage : null);
     }
 
     /**

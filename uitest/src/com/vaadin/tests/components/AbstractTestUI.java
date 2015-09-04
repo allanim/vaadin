@@ -46,6 +46,11 @@ public abstract class AbstractTestUI extends UI {
     }
 
     protected void warnIfWidgetsetMaybeNotCompiled() {
+        // Can't check location if sendUrlAsParameters is disabled
+        if (!getSession().getConfiguration().isSendUrlsAsParameters()) {
+            return;
+        }
+
         // Ignore if using debug mode
         String query = getPage().getLocation().getQuery();
         if (query != null && query.matches(".*[&?]gwt\\.codesvr.*")) {
@@ -200,4 +205,18 @@ public abstract class AbstractTestUI extends UI {
         return getSession().getBrowser();
     }
 
+    /**
+     * Execute the provided runnable on the UI thread as soon as the current
+     * request has been sent.
+     */
+    protected void runAfterResponse(final Runnable runnable) {
+        // Immediately start a thread that will start waiting for the session to
+        // get unlocked.
+        new Thread() {
+            @Override
+            public void run() {
+                accessSynchronously(runnable);
+            }
+        }.start();
+    }
 }

@@ -225,7 +225,7 @@ public class ResourceLoader {
      */
     public void loadScript(final String scriptUrl,
             final ResourceLoadListener resourceLoadListener, boolean async) {
-        final String url = Util.getAbsoluteUrl(scriptUrl);
+        final String url = WidgetUtil.getAbsoluteUrl(scriptUrl);
         ResourceLoadEvent event = new ResourceLoadEvent(this, url, false);
         if (loadedResources.contains(url)) {
             if (resourceLoadListener != null) {
@@ -283,8 +283,7 @@ public class ResourceLoader {
      * @since 7.2.4
      */
     public static boolean supportsInOrderScriptExecution() {
-        return BrowserInfo.get().isIE()
-                && BrowserInfo.get().getBrowserMajorVersion() >= 11;
+        return BrowserInfo.get().isIE11() || BrowserInfo.get().isEdge();
     }
 
     /**
@@ -307,7 +306,7 @@ public class ResourceLoader {
      */
     public void preloadResource(String url,
             ResourceLoadListener resourceLoadListener) {
-        url = Util.getAbsoluteUrl(url);
+        url = WidgetUtil.getAbsoluteUrl(url);
         ResourceLoadEvent event = new ResourceLoadEvent(this, url, true);
         if (loadedResources.contains(url) || preloadedResources.contains(url)) {
             // Already loaded or preloaded -> just fire listener
@@ -424,7 +423,7 @@ public class ResourceLoader {
      */
     public void loadStylesheet(final String stylesheetUrl,
             final ResourceLoadListener resourceLoadListener) {
-        final String url = Util.getAbsoluteUrl(stylesheetUrl);
+        final String url = WidgetUtil.getAbsoluteUrl(stylesheetUrl);
         final ResourceLoadEvent event = new ResourceLoadEvent(this, url, false);
         if (loadedResources.contains(url)) {
             if (resourceLoadListener != null) {
@@ -486,10 +485,11 @@ public class ResourceLoader {
                 addOnloadHandler(linkElement, new ResourceLoadListener() {
                     @Override
                     public void onLoad(ResourceLoadEvent event) {
-                        // Chrome && IE fires load for errors, must check
+                        // Chrome, IE, Edge all fire load for errors, must check
                         // stylesheet data
                         if (BrowserInfo.get().isChrome()
-                                || BrowserInfo.get().isIE()) {
+                                || BrowserInfo.get().isIE()
+                                || BrowserInfo.get().isEdge()) {
                             int styleSheetLength = getStyleSheetLength(url);
                             // Error if there's an empty stylesheet
                             if (styleSheetLength == 0) {

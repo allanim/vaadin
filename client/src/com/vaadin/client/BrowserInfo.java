@@ -30,6 +30,7 @@ public class BrowserInfo {
 
     private static final String BROWSER_OPERA = "op";
     private static final String BROWSER_IE = "ie";
+    private static final String BROWSER_EDGE = "edge";
     private static final String BROWSER_FIREFOX = "ff";
     private static final String BROWSER_SAFARI = "sa";
 
@@ -88,7 +89,9 @@ public class BrowserInfo {
         } else if (browserDetails.isIE()) {
             touchDevice = detectIETouchDevice();
         } else {
-            touchDevice = detectTouchDevice();
+            // PhantomJS pretends to be a touch device which breaks some UI
+            // tests
+            touchDevice = !browserDetails.isPhantomJS() && detectTouchDevice();
         }
     }
 
@@ -169,6 +172,13 @@ public class BrowserInfo {
                 minorVersionClass = majorVersionClass
                         + browserDetails.getBrowserMinorVersion();
                 browserEngineClass = ENGINE_TRIDENT;
+            } else if (browserDetails.isEdge()) {
+                browserIdentifier = BROWSER_EDGE;
+                majorVersionClass = browserIdentifier
+                        + getBrowserMajorVersion();
+                minorVersionClass = majorVersionClass
+                        + browserDetails.getBrowserMinorVersion();
+                browserEngineClass = "";
             } else if (browserDetails.isOpera()) {
                 browserIdentifier = BROWSER_OPERA;
                 majorVersionClass = browserIdentifier
@@ -223,6 +233,10 @@ public class BrowserInfo {
         return browserDetails.isIE();
     }
 
+    public boolean isEdge() {
+        return browserDetails.isEdge();
+    }
+
     public boolean isFirefox() {
         return browserDetails.isFirefox();
     }
@@ -241,6 +255,10 @@ public class BrowserInfo {
 
     public boolean isIE10() {
         return isIE() && getBrowserMajorVersion() == 10;
+    }
+
+    public boolean isIE11() {
+        return isIE() && getBrowserMajorVersion() == 11;
     }
 
     public boolean isChrome() {
@@ -343,7 +361,7 @@ public class BrowserInfo {
     public boolean requiresOverflowAutoFix() {
         return (getWebkitVersion() > 0 || getOperaVersion() >= 11
                 || getIEVersion() >= 10 || isFirefox())
-                && Util.getNativeScrollbarSize() > 0;
+                && WidgetUtil.getNativeScrollbarSize() > 0;
     }
 
     /**
@@ -359,7 +377,8 @@ public class BrowserInfo {
      *         otherwise <code>false</code>
      */
     public boolean requiresPositionAbsoluteOverflowAutoFix() {
-        return (getWebkitVersion() > 0) && Util.getNativeScrollbarSize() > 0;
+        return (getWebkitVersion() > 0)
+                && WidgetUtil.getNativeScrollbarSize() > 0;
     }
 
     /**
@@ -410,6 +429,11 @@ public class BrowserInfo {
         if (isIOS() && isWebkit() && getOperatingSystemMajorVersion() >= 6) {
             return false;
         }
+
+        if (isIE()) {
+            return false;
+        }
+
         return true;
     }
 

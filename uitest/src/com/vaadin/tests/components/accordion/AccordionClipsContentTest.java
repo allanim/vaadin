@@ -30,28 +30,16 @@ public class AccordionClipsContentTest extends MultiBrowserTest {
     public void testAccordionClipsContent() throws Exception {
         openTestURL();
 
-        /*
-         * MenuBarElement doesn't have any API, so this part is ugly until
-         * #13364 is fixed
-         */
-
-        // Component
-        vaadinElement("PID_Smenu#item0").click();
-        // Component container features
-        clickAt("Root/VOverlay[0]/VMenuBar[0]#item3", 136, 8);
-        // Add component
-        clickAt("Root/VOverlay[1]/VMenuBar[0]#item0", 65, 4);
-        // NativeButton
-        clickAt("Root/VOverlay[2]/VMenuBar[0]#item1", 86, 2);
-        // autoxauto
-        vaadinElement("Root/VOverlay[3]/VMenuBar[0]#item0").click();
+        selectMenuPath("Component", "Component container features",
+                "Add component", "NativeButton", "auto x auto");
 
         $(NativeButtonElement.class).first().click();
 
-        compareScreen("button-clicked");
-    }
+        // Give the button time to pop back up in IE8.
+        // If this sleep causes issues, next best thing is to click outside the
+        // button to remove focus - needs new screenshots for all browsers.
+        Thread.sleep(10);
 
-    private void clickAt(String vaadinLocator, int x, int y) {
-        testBenchElement(vaadinElement(vaadinLocator)).click(x, y);
+        compareScreen("button-clicked");
     }
 }

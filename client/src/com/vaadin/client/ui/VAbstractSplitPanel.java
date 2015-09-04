@@ -43,14 +43,13 @@ import com.vaadin.client.BrowserInfo;
 import com.vaadin.client.ComponentConnector;
 import com.vaadin.client.ConnectorMap;
 import com.vaadin.client.LayoutManager;
-import com.vaadin.client.StyleConstants;
-import com.vaadin.client.Util;
 import com.vaadin.client.VConsole;
+import com.vaadin.client.WidgetUtil;
 import com.vaadin.client.ui.TouchScrollDelegate.TouchScrollHandler;
 import com.vaadin.client.ui.VAbstractSplitPanel.SplitterMoveHandler.SplitterMoveEvent;
 import com.vaadin.shared.ui.Orientation;
 
-public class VAbstractSplitPanel extends ComplexPanel {
+public abstract class VAbstractSplitPanel extends ComplexPanel {
 
     private boolean enabled = false;
 
@@ -125,14 +124,13 @@ public class VAbstractSplitPanel extends ComplexPanel {
 
     public VAbstractSplitPanel(Orientation orientation) {
         setElement(DOM.createDiv());
-        setStyleName(StyleConstants.UI_LAYOUT);
         switch (orientation) {
         case HORIZONTAL:
-            addStyleName(CLASSNAME + "-horizontal");
+            setStyleName(CLASSNAME + "-horizontal");
             break;
         case VERTICAL:
         default:
-            addStyleName(CLASSNAME + "-vertical");
+            setStyleName(CLASSNAME + "-vertical");
             break;
         }
         // size below will be overridden in update from uidl, initial size
@@ -573,11 +571,12 @@ public class VAbstractSplitPanel extends ComplexPanel {
             }
             break;
         case Event.ONCLICK:
+            stopResize();
             resizing = false;
             break;
         }
         // Only fire click event listeners if the splitter isn't moved
-        if (Util.isTouchEvent(event) || !resized) {
+        if (WidgetUtil.isTouchEvent(event) || !resized) {
             super.onBrowserEvent(event);
         } else if (DOM.eventGetType(event) == Event.ONMOUSEUP) {
             // Reset the resized flag after a mouseup has occured so the next
@@ -592,26 +591,61 @@ public class VAbstractSplitPanel extends ComplexPanel {
         }
         final Element trg = event.getEventTarget().cast();
         if (trg == splitter || trg == DOM.getChild(splitter, 0)) {
+            startResize();
             resizing = true;
             DOM.setCapture(getElement());
             origX = DOM.getElementPropertyInt(splitter, "offsetLeft");
             origY = DOM.getElementPropertyInt(splitter, "offsetTop");
-            origMouseX = Util.getTouchOrMouseClientX(event);
-            origMouseY = Util.getTouchOrMouseClientY(event);
+            origMouseX = WidgetUtil.getTouchOrMouseClientX(event);
+            origMouseY = WidgetUtil.getTouchOrMouseClientY(event);
             event.stopPropagation();
             event.preventDefault();
         }
     }
 
+    /**
+     * Called when starting drag resize
+     * 
+     * @since 7.5.1
+     */
+    abstract protected void startResize();
+
+    /**
+     * Called when stopping drag resize
+     * 
+     * @since 7.5.1
+     */
+    abstract protected void stopResize();
+
+    /**
+     * Gets the first container
+     * 
+     * @since 7.5.1
+     * @return the firstContainer
+     */
+    protected Element getFirstContainer() {
+        return firstContainer;
+    }
+
+    /**
+     * Gets the second container
+     * 
+     * @since 7.5.1
+     * @return the secondContainer
+     */
+    protected Element getSecondContainer() {
+        return secondContainer;
+    }
+
     public void onMouseMove(Event event) {
         switch (orientation) {
         case HORIZONTAL:
-            final int x = Util.getTouchOrMouseClientX(event);
+            final int x = WidgetUtil.getTouchOrMouseClientX(event);
             onHorizontalMouseMove(x);
             break;
         case VERTICAL:
         default:
-            final int y = Util.getTouchOrMouseClientY(event);
+            final int y = WidgetUtil.getTouchOrMouseClientY(event);
             onVerticalMouseMove(y);
             break;
         }
@@ -687,8 +721,9 @@ public class VAbstractSplitPanel extends ComplexPanel {
     public void onMouseUp(Event event) {
         DOM.releaseCapture(getElement());
         hideDraggingCurtain();
+        stopResize();
         resizing = false;
-        if (!Util.isTouchEvent(event)) {
+        if (!WidgetUtil.isTouchEvent(event)) {
             onMouseMove(event);
         }
         fireEvent(new SplitterMoveEvent(this));

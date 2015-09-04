@@ -65,10 +65,11 @@ import com.vaadin.client.BrowserInfo;
 import com.vaadin.client.ComponentConnector;
 import com.vaadin.client.ComputedStyle;
 import com.vaadin.client.ConnectorMap;
+import com.vaadin.client.DeferredWorker;
 import com.vaadin.client.Focusable;
 import com.vaadin.client.UIDL;
-import com.vaadin.client.Util;
 import com.vaadin.client.VConsole;
+import com.vaadin.client.WidgetUtil;
 import com.vaadin.client.ui.aria.AriaHelper;
 import com.vaadin.client.ui.aria.HandlesAriaCaption;
 import com.vaadin.client.ui.aria.HandlesAriaInvalid;
@@ -79,6 +80,7 @@ import com.vaadin.shared.AbstractComponentState;
 import com.vaadin.shared.EventId;
 import com.vaadin.shared.ui.ComponentStateUtil;
 import com.vaadin.shared.ui.combobox.FilteringMode;
+import com.vaadin.shared.util.SharedUtil;
 
 /**
  * Client side implementation of the Select component.
@@ -89,7 +91,7 @@ import com.vaadin.shared.ui.combobox.FilteringMode;
 public class VFilterSelect extends Composite implements Field, KeyDownHandler,
         KeyUpHandler, ClickHandler, FocusHandler, BlurHandler, Focusable,
         SubPartAware, HandlesAriaCaption, HandlesAriaInvalid,
-        HandlesAriaRequired {
+        HandlesAriaRequired, DeferredWorker {
 
     /**
      * Represents a suggestion in the suggestion popup box
@@ -98,7 +100,7 @@ public class VFilterSelect extends Composite implements Field, KeyDownHandler,
 
         private final String key;
         private final String caption;
-        private String iconUri;
+        private String untranslatedIconUri;
 
         /**
          * Constructor
@@ -110,8 +112,7 @@ public class VFilterSelect extends Composite implements Field, KeyDownHandler,
             key = uidl.getStringAttribute("key");
             caption = uidl.getStringAttribute("caption");
             if (uidl.hasAttribute("icon")) {
-                iconUri = client.translateVaadinUri(uidl
-                        .getStringAttribute("icon"));
+                untranslatedIconUri = uidl.getStringAttribute("icon");
             }
         }
 
@@ -124,7 +125,8 @@ public class VFilterSelect extends Composite implements Field, KeyDownHandler,
         @Override
         public String getDisplayString() {
             final StringBuffer sb = new StringBuffer();
-            final Icon icon = client.getIcon(iconUri);
+            final Icon icon = client.getIcon(client
+                    .translateVaadinUri(untranslatedIconUri));
             if (icon != null) {
                 sb.append(icon.getElement().getString());
             }
@@ -134,7 +136,7 @@ public class VFilterSelect extends Composite implements Field, KeyDownHandler,
                 // options and are not collapsed (#7506)
                 content = "&nbsp;";
             } else {
-                content = Util.escapeHTML(caption);
+                content = WidgetUtil.escapeHTML(caption);
             }
             sb.append("<span>" + content + "</span>");
             return sb.toString();
@@ -164,7 +166,7 @@ public class VFilterSelect extends Composite implements Field, KeyDownHandler,
          * @return
          */
         public String getIconUri() {
-            return iconUri;
+            return client.translateVaadinUri(untranslatedIconUri);
         }
 
         /**
@@ -190,8 +192,8 @@ public class VFilterSelect extends Composite implements Field, KeyDownHandler,
                     || (caption != null && !caption.equals(other.caption))) {
                 return false;
             }
-            if ((iconUri == null && other.iconUri != null)
-                    || (iconUri != null && !iconUri.equals(other.iconUri))) {
+            if (!SharedUtil.equals(untranslatedIconUri,
+                    other.untranslatedIconUri)) {
                 return false;
             }
             return true;
@@ -416,7 +418,9 @@ public class VFilterSelect extends Composite implements Field, KeyDownHandler,
                 selectPrevPage();
 
             } else {
-                selectItem(menu.getItems().get(menu.getItems().size() - 1));
+                if (!menu.getItems().isEmpty()) {
+                    selectLastItem();
+                }
             }
         }
 
@@ -454,7 +458,6 @@ public class VFilterSelect extends Composite implements Field, KeyDownHandler,
             // Set the text.
             setText(suggestion.getReplacementString());
 
-            menu.updateKeyboardSelectedItem();
         }
 
         /*
@@ -596,11 +599,12 @@ public class VFilterSelect extends Composite implements Field, KeyDownHandler,
                     + "]");
 
             Element menuFirstChild = menu.getElement().getFirstChildElement();
-            final int naturalMenuWidth = menuFirstChild.getOffsetWidth();
+            final int naturalMenuWidth = WidgetUtil
+                    .getRequiredWidth(menuFirstChild);
 
             if (popupOuterPadding == -1) {
-                popupOuterPadding = Util.measureHorizontalPaddingAndBorder(
-                        getElement(), 2);
+                popupOuterPadding = WidgetUtil
+                        .measureHorizontalPaddingAndBorder(getElement(), 2);
             }
 
             if (naturalMenuWidth < desiredWidth) {
@@ -608,13 +612,21 @@ public class VFilterSelect extends Composite implements Field, KeyDownHandler,
                 menuFirstChild.getStyle().setWidth(100, Unit.PCT);
             }
 
-            if (BrowserInfo.get().isIE()) {
+            if (BrowserInfo.get().isIE()
+                    && BrowserInfo.get().getBrowserMajorVersion() < 11) {
+                // Must take margin,border,padding manually into account for
+                // menu element as we measure the element child and set width to
+                // the element parent
+                double naturalMenuOuterWidth = WidgetUtil
+                        .getRequiredWidthDouble(menuFirstChild)
+                        + getMarginBorderPaddingWidth(menu.getElement());
+
                 /*
                  * IE requires us to specify the width for the container
                  * element. Otherwise it will be 100% wide
                  */
-                int rootWidth = Math.max(desiredWidth, naturalMenuWidth)
-                        - popupOuterPadding;
+                double rootWidth = Math.max(desiredWidth - popupOuterPadding,
+                        naturalMenuOuterWidth);
                 getContainerElement().getStyle().setWidth(rootWidth, Unit.PX);
             }
 
@@ -657,7 +669,7 @@ public class VFilterSelect extends Composite implements Field, KeyDownHandler,
                 menu.setHeight(menuHeight + "px");
 
                 final int naturalMenuWidthPlusScrollBar = naturalMenuWidth
-                        + Util.getNativeScrollbarSize();
+                        + WidgetUtil.getNativeScrollbarSize();
                 if (offsetWidth < naturalMenuWidthPlusScrollBar) {
                     menu.setWidth(naturalMenuWidthPlusScrollBar + "px");
                 }
@@ -739,13 +751,6 @@ public class VFilterSelect extends Composite implements Field, KeyDownHandler,
     public class SuggestionMenu extends MenuBar implements SubPartAware,
             LoadHandler {
 
-        /**
-         * Tracks the item that is currently selected using the keyboard. This
-         * is need only because mouseover changes the selection and we do not
-         * want to use that selection when pressing enter to select the item.
-         */
-        private MenuItem keyboardSelectedItem;
-
         private VLazyExecutor delayedImageLoadExecutioner = new VLazyExecutor(
                 100, new ScheduledCommand() {
 
@@ -807,23 +812,33 @@ public class VFilterSelect extends Composite implements Field, KeyDownHandler,
             if (enableDebug) {
                 debug("VFS.SM: setSuggestions(" + suggestions + ")");
             }
-            // Reset keyboard selection when contents is updated to avoid
-            // reusing old, invalid data
-            setKeyboardSelectedItem(null);
 
             clearItems();
             final Iterator<FilterSelectSuggestion> it = suggestions.iterator();
+            boolean isFirstIteration = true;
             while (it.hasNext()) {
                 final FilterSelectSuggestion s = it.next();
                 final MenuItem mi = new MenuItem(s.getDisplayString(), true, s);
                 Roles.getListitemRole().set(mi.getElement());
 
-                Util.sinkOnloadForImages(mi.getElement());
+                WidgetUtil.sinkOnloadForImages(mi.getElement());
 
                 this.addItem(mi);
-                if (s == currentSuggestion) {
+
+                // By default, first item on the list is always highlighted,
+                // unless adding new items is allowed.
+                if (isFirstIteration && !allowNewItem) {
                     selectItem(mi);
                 }
+
+                // If the filter matches the current selection, highlight that
+                // instead of the first item.
+                if (tb.getText().equals(s.getReplacementString())
+                        && s == currentSuggestion) {
+                    selectItem(mi);
+                }
+
+                isFirstIteration = false;
             }
         }
 
@@ -971,14 +986,6 @@ public class VFilterSelect extends Composite implements Field, KeyDownHandler,
 
         }
 
-        private MenuItem getKeyboardSelectedItem() {
-            return keyboardSelectedItem;
-        }
-
-        public void setKeyboardSelectedItem(MenuItem menuItem) {
-            keyboardSelectedItem = menuItem;
-        }
-
         /**
          * @deprecated use {@link SuggestionPopup#selectFirstItem()} instead.
          */
@@ -998,13 +1005,6 @@ public class VFilterSelect extends Composite implements Field, KeyDownHandler,
             List<MenuItem> items = getItems();
             MenuItem lastItem = items.get(items.size() - 1);
             selectItem(lastItem);
-        }
-
-        /*
-         * Sets the keyboard item as the current selected one.
-         */
-        void updateKeyboardSelectedItem() {
-            setKeyboardSelectedItem(getSelectedItem());
         }
 
         /*
@@ -1069,7 +1069,8 @@ public class VFilterSelect extends Composite implements Field, KeyDownHandler,
                  * the end and the focus to the start. This makes Firefox work
                  * the same way as other browsers (#13477)
                  */
-                Util.setSelectionRange(getElement(), pos, length, "backward");
+                WidgetUtil.setSelectionRange(getElement(), pos, length,
+                        "backward");
 
             } else {
                 /*
@@ -1176,8 +1177,6 @@ public class VFilterSelect extends Composite implements Field, KeyDownHandler,
 
     /** For internal use only. May be removed or replaced in the future. */
     public boolean updateSelectionWhenReponseIsReceived = false;
-
-    private boolean tabPressedWhenPopupOpen = false;
 
     /** For internal use only. May be removed or replaced in the future. */
     public boolean initDone = false;
@@ -1291,6 +1290,12 @@ public class VFilterSelect extends Composite implements Field, KeyDownHandler,
         setStyleName(CLASSNAME);
 
         sinkEvents(Event.ONPASTE);
+    }
+
+    private static double getMarginBorderPaddingWidth(Element element) {
+        final ComputedStyle s = new ComputedStyle(element);
+        return s.getMarginWidth() + s.getBorderWidth() + s.getPaddingWidth();
+
     }
 
     /*
@@ -1420,8 +1425,10 @@ public class VFilterSelect extends Composite implements Field, KeyDownHandler,
             return;
         }
         if (!filter.equals(lastFilter)) {
-            // we are on subsequent page and text has changed -> reset page
-            if ("".equals(filter)) {
+            // when filtering, let the server decide the page unless we've
+            // set the filter to empty and explicitly said that we want to see
+            // the results starting from page 0.
+            if ("".equals(filter) && page != 0) {
                 // let server decide
                 page = -1;
             } else {
@@ -1436,7 +1443,6 @@ public class VFilterSelect extends Composite implements Field, KeyDownHandler,
 
         lastFilter = filter;
         currentPage = page;
-
     }
 
     /** For internal use only. May be removed or replaced in the future. */
@@ -1609,7 +1615,7 @@ public class VFilterSelect extends Composite implements Field, KeyDownHandler,
     }
 
     private void forceReflow() {
-        Util.setStyleTemporarily(tb.getElement(), "zoom", "1");
+        WidgetUtil.setStyleTemporarily(tb.getElement(), "zoom", "1");
     }
 
     /**
@@ -1621,7 +1627,7 @@ public class VFilterSelect extends Composite implements Field, KeyDownHandler,
         int availableHeight = 0;
         availableHeight = getOffsetHeight();
 
-        int iconHeight = Util.getRequiredHeight(selectedItemIcon);
+        int iconHeight = WidgetUtil.getRequiredHeight(selectedItemIcon);
         int marginTop = (availableHeight - iconHeight) / 2;
         selectedItemIcon.getElement().getStyle()
                 .setMarginTop(marginTop, Unit.PX);
@@ -1767,45 +1773,20 @@ public class VFilterSelect extends Composite implements Field, KeyDownHandler,
             selectPrevPage();
             event.stopPropagation();
             break;
-        case KeyCodes.KEY_TAB:
-            tabPressedWhenPopupOpen = true;
-            filterOptions(currentPage);
-            // onBlur() takes care of the rest
-            break;
         case KeyCodes.KEY_ESCAPE:
             reset();
             DOM.eventPreventDefault(DOM.eventGetCurrentEvent());
             event.stopPropagation();
             break;
+        case KeyCodes.KEY_TAB:
         case KeyCodes.KEY_ENTER:
-            if (suggestionPopup.menu.getKeyboardSelectedItem() == null) {
-                /*
-                 * Nothing selected using up/down. Happens e.g. when entering a
-                 * text (causes popup to open) and then pressing enter.
-                 */
-                if (!allowNewItem) {
-                    /*
-                     * New items are not allowed: If there is only one
-                     * suggestion, select that. If there is more than one
-                     * suggestion Enter key should work as Escape key. Otherwise
-                     * do nothing.
-                     */
-                    if (currentSuggestions.size() == 1) {
-                        onSuggestionSelected(currentSuggestions.get(0));
-                    } else if (currentSuggestions.size() > 1) {
-                        reset();
-                    }
-                } else {
-                    // Handle addition of new items.
-                    suggestionPopup.menu.doSelectedItemAction();
-                }
+
+            if (!allowNewItem) {
+                onSuggestionSelected(currentSuggestions
+                        .get(suggestionPopup.menu.getSelectedIndex()));
             } else {
-                /*
-                 * Get the suggestion that was navigated to using up/down.
-                 */
-                currentSuggestion = ((FilterSelectSuggestion) suggestionPopup.menu
-                        .getKeyboardSelectedItem().getCommand());
-                onSuggestionSelected(currentSuggestion);
+                // Handle addition of new items.
+                suggestionPopup.menu.doSelectedItemAction();
             }
 
             event.stopPropagation();
@@ -1862,7 +1843,9 @@ public class VFilterSelect extends Composite implements Field, KeyDownHandler,
                 break;
             default:
                 if (textInputEnabled) {
-                    filterOptions(currentPage);
+                    // when filtering, we always want to see the results on the
+                    // first page first.
+                    filterOptions(0);
                 }
                 break;
             }
@@ -1936,7 +1919,7 @@ public class VFilterSelect extends Composite implements Field, KeyDownHandler,
      */
     public void updateSuggestionPopupMinWidth() {
         // used only to calculate minimum width
-        String captions = Util.escapeHTML(inputPrompt);
+        String captions = WidgetUtil.escapeHTML(inputPrompt);
 
         for (FilterSelectSuggestion suggestion : currentSuggestions) {
             // Collect captions so we can calculate minimum width for
@@ -1944,7 +1927,8 @@ public class VFilterSelect extends Composite implements Field, KeyDownHandler,
             if (captions.length() > 0) {
                 captions += "|";
             }
-            captions += Util.escapeHTML(suggestion.getReplacementString());
+            captions += WidgetUtil
+                    .escapeHTML(suggestion.getReplacementString());
         }
 
         // Calculate minimum textarea width
@@ -2051,7 +2035,7 @@ public class VFilterSelect extends Composite implements Field, KeyDownHandler,
              */
             preventNextBlurEventInIE = false;
 
-            Element focusedElement = Util.getIEFocusedElement();
+            Element focusedElement = WidgetUtil.getFocusedElement();
             if (getElement().isOrHasChild(focusedElement)
                     || suggestionPopup.getElement()
                             .isOrHasChild(focusedElement)) {
@@ -2067,19 +2051,6 @@ public class VFilterSelect extends Composite implements Field, KeyDownHandler,
 
         focused = false;
         if (!readonly) {
-            // much of the TAB handling takes place here
-            if (tabPressedWhenPopupOpen) {
-                tabPressedWhenPopupOpen = false;
-                waitingForFilteringResponse = false;
-                suggestionPopup.menu.doSelectedItemAction();
-                suggestionPopup.hide();
-            } else if ((!suggestionPopup.isAttached() && waitingForFilteringResponse)
-                    || suggestionPopup.isJustClosed()) {
-                // typing so fast the popup was never opened, or it's just
-                // closed
-                waitingForFilteringResponse = false;
-                suggestionPopup.menu.doSelectedItemAction();
-            }
             if (selectedOptionKey == null) {
                 setPromptingOn();
             } else if (currentSuggestion != null) {
@@ -2129,7 +2100,7 @@ public class VFilterSelect extends Composite implements Field, KeyDownHandler,
              * when the popup is used to view longer items than the text box is
              * wide.
              */
-            int w = Util.getRequiredWidth(this);
+            int w = WidgetUtil.getRequiredWidth(this);
 
             if ((!initDone || currentPage + 1 < 0)
                     && suggestionPopupMinWidth > w) {
@@ -2150,9 +2121,9 @@ public class VFilterSelect extends Composite implements Field, KeyDownHandler,
 
                 // Use util.getRequiredWidth instead of getOffsetWidth here
 
-                int iconWidth = selectedItemIcon == null ? 0 : Util
+                int iconWidth = selectedItemIcon == null ? 0 : WidgetUtil
                         .getRequiredWidth(selectedItemIcon);
-                int buttonWidth = popupOpener == null ? 0 : Util
+                int buttonWidth = popupOpener == null ? 0 : WidgetUtil
                         .getRequiredWidth(popupOpener);
 
                 /*
@@ -2232,11 +2203,15 @@ public class VFilterSelect extends Composite implements Field, KeyDownHandler,
 
     @Override
     public com.google.gwt.user.client.Element getSubPartElement(String subPart) {
-        if ("textbox".equals(subPart)) {
+        String[] parts = subPart.split("/");
+        if ("textbox".equals(parts[0])) {
             return tb.getElement();
-        } else if ("button".equals(subPart)) {
+        } else if ("button".equals(parts[0])) {
             return popupOpener.getElement();
-        } else if ("popup".equals(subPart) && suggestionPopup.isAttached()) {
+        } else if ("popup".equals(parts[0]) && suggestionPopup.isAttached()) {
+            if (parts.length == 2) {
+                return suggestionPopup.menu.getSubPartElement(parts[1]);
+            }
             return suggestionPopup.getElement();
         }
         return null;
@@ -2278,6 +2253,12 @@ public class VFilterSelect extends Composite implements Field, KeyDownHandler,
         // Then set your specific selection type only after
         // client.updateVariable() method call.
         selectPopupItemWhenResponseIsReceived = Select.NONE;
+    }
+
+    @Override
+    public boolean isWorkPending() {
+        return waitingForFilteringResponse
+                || suggestionPopup.lazyPageScroller.isRunning();
     }
 
 }

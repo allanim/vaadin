@@ -392,8 +392,11 @@ public class SimpleDayCell extends FocusableFlowPanel implements
 
             int endX = event.getClientX();
             int endY = event.getClientY();
-            int xDiff = startX - endX;
-            int yDiff = startY - endY;
+            int xDiff = 0, yDiff = 0;
+            if (startX != -1 && startY != -1) {
+                xDiff = startX - endX;
+                yDiff = startY - endY;
+            }
             startX = -1;
             startY = -1;
             prevDayDiff = 0;
@@ -436,27 +439,23 @@ public class SimpleDayCell extends FocusableFlowPanel implements
             // event clicks should be allowed even when read-only
             monthEventMouseDown = true;
 
-            if (w instanceof MonthEventLabel) {
+            if (calendar.isEventMoveAllowed()) {
                 startCalendarEventDrag(event, (MonthEventLabel) w);
             }
-        } else if (!calendar.isReadOnly()) {
-            // these are not allowed when in read-only
-            if (w == bottomspacer) {
-                if (scrollable) {
-                    setLimitedCellHeight();
-                } else {
-                    setUnlimitedCellHeight();
-                }
-                reDraw(true);
-
-            } else if (w == this && !scrollable) {
-                MonthGrid grid = getMonthGrid();
-                if (grid.isEnabled() && calendar.isRangeSelectAllowed()) {
-                    grid.setSelectionStart(this);
-                    grid.setSelectionEnd(this);
-                }
-            } else if (w instanceof Label) {
-                labelMouseDown = true;
+        } else if (w == bottomspacer) {
+            if (scrollable) {
+                setLimitedCellHeight();
+            } else {
+                setUnlimitedCellHeight();
+            }
+            reDraw(true);
+        } else if (w instanceof Label) {
+            labelMouseDown = true;
+        } else if (w == this && !scrollable) {
+            MonthGrid grid = getMonthGrid();
+            if (grid.isEnabled() && calendar.isRangeSelectAllowed()) {
+                grid.setSelectionStart(this);
+                grid.setSelectionEnd(this);
             }
         }
 

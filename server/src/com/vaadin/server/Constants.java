@@ -67,7 +67,7 @@ public interface Constants {
 
     // Keep the version number in sync with push/build.xml and other locations
     // listed in that file
-    static final String REQUIRED_ATMOSPHERE_RUNTIME_VERSION = "2.2.4.vaadin2";
+    static final String REQUIRED_ATMOSPHERE_RUNTIME_VERSION = "2.2.7.vaadin1";
 
     static final String INVALID_ATMOSPHERE_VERSION_WARNING = "\n"
             + "=================================================================\n"
@@ -136,6 +136,8 @@ public interface Constants {
     static final String SERVLET_PARAMETER_UI_PROVIDER = "UIProvider";
     static final String SERVLET_PARAMETER_LEGACY_PROPERTY_TOSTRING = "legacyPropertyToString";
     static final String SERVLET_PARAMETER_SYNC_ID_CHECK = "syncIdCheck";
+    static final String SERVLET_PARAMETER_SENDURLSASPARAMETERS = "sendUrlsAsParameters";
+    static final String SERVLET_PARAMETER_PUSH_SUSPEND_TIMEOUT_LONGPOLLING = "pushLongPollingSuspendTimeout";
 
     // Configurable parameter names
     static final String PARAMETER_VAADIN_RESOURCES = "Resources";

@@ -243,6 +243,34 @@ public abstract class AbstractComponent extends AbstractClientConnector
         }
     }
 
+    /**
+     * Adds or removes a style name. Multiple styles can be specified as a
+     * space-separated list of style names.
+     * 
+     * If the {@code add} parameter is true, the style name is added to the
+     * component. If the {@code add} parameter is false, the style name is
+     * removed from the component.
+     * <p>
+     * Functionally this is equivalent to using {@link #addStyleName(String)} or
+     * {@link #removeStyleName(String)}
+     * 
+     * @since 7.5
+     * @param style
+     *            the style name to be added or removed
+     * @param add
+     *            <code>true</code> to add the given style, <code>false</code>
+     *            to remove it
+     * @see #addStyleName(String)
+     * @see #removeStyleName(String)
+     */
+    public void setStyleName(String style, boolean add) {
+        if (add) {
+            addStyleName(style);
+        } else {
+            removeStyleName(style);
+        }
+    }
+
     /*
      * Get's the component's caption. Don't add a JavaDoc comment here, we use
      * the default documentation from implemented interface.
@@ -405,6 +433,26 @@ public abstract class AbstractComponent extends AbstractClientConnector
         }
     }
 
+    /**
+     * Returns the explicitly set immediate value.
+     * 
+     * @return the explicitly set immediate value or null if
+     *         {@link #setImmediate(boolean)} has not been explicitly invoked
+     */
+    protected Boolean getExplicitImmediateValue() {
+        return explicitImmediateValue;
+    }
+
+    /**
+     * Returns the immediate mode of the component.
+     * <p>
+     * Certain operations such as adding a value change listener will set the
+     * component into immediate mode if {@link #setImmediate(boolean)} has not
+     * been explicitly called with false.
+     * 
+     * @return true if the component is in immediate mode (explicitly or
+     *         implicitly set), false if the component if not in immediate mode
+     */
     public boolean isImmediate() {
         if (explicitImmediateValue != null) {
             return explicitImmediateValue;
@@ -959,8 +1007,8 @@ public abstract class AbstractComponent extends AbstractClientConnector
         }
         // handle immediate
         if (attr.hasKey("immediate")) {
-            setImmediate(DesignAttributeHandler.parseBoolean(attr
-                    .get("immediate")));
+            setImmediate(DesignAttributeHandler.getFormatter().parse(
+                    attr.get("immediate"), Boolean.class));
         }
 
         // handle locale
@@ -982,11 +1030,6 @@ public abstract class AbstractComponent extends AbstractClientConnector
                             Integer.class));
         }
 
-        // handle responsive
-        if (attr.hasKey("responsive")) {
-            setResponsive(DesignAttributeHandler.parseBoolean(attr
-                    .get("responsive")));
-        }
         // check for unsupported attributes
         Set<String> supported = new HashSet<String>();
         supported.addAll(getDefaultAttributes());
@@ -1032,11 +1075,11 @@ public abstract class AbstractComponent extends AbstractClientConnector
     /**
      * Toggles responsiveness of this component.
      * 
-     * @since 7.4
+     * @since 7.5.0
      * @param responsive
      *            boolean enables responsiveness, false disables
      */
-    private void setResponsive(boolean responsive) {
+    public void setResponsive(boolean responsive) {
         if (responsive) {
             // make responsive if necessary
             if (!isResponsive()) {
@@ -1057,10 +1100,10 @@ public abstract class AbstractComponent extends AbstractClientConnector
     /**
      * Returns true if the component is responsive
      * 
-     * @since 7.4
+     * @since 7.5.0
      * @return true if the component is responsive
      */
-    private boolean isResponsive() {
+    public boolean isResponsive() {
         for (Extension e : getExtensions()) {
             if (e instanceof Responsive) {
                 return true;
@@ -1127,20 +1170,19 @@ public abstract class AbstractComponent extends AbstractClientConnector
 
         // first try the full shorthands
         if (widthFull && heightFull) {
-            attributes.put("size-full", "true");
+            attributes.put("size-full", "");
         } else if (widthAuto && heightAuto) {
-            attributes.put("size-auto", "true");
+            attributes.put("size-auto", "");
         } else {
             // handle width
             if (!hasEqualWidth(defaultInstance)) {
                 if (widthFull) {
-                    attributes.put("width-full", "true");
+                    attributes.put("width-full", "");
                 } else if (widthAuto) {
-                    attributes.put("width-auto", "true");
+                    attributes.put("width-auto", "");
                 } else {
-                    String widthString = DesignAttributeHandler
-                            .formatFloat(getWidth())
-                            + getWidthUnits().getSymbol();
+                    String widthString = DesignAttributeHandler.getFormatter()
+                            .format(getWidth()) + getWidthUnits().getSymbol();
                     attributes.put("width", widthString);
 
                 }
@@ -1148,13 +1190,12 @@ public abstract class AbstractComponent extends AbstractClientConnector
             if (!hasEqualHeight(defaultInstance)) {
                 // handle height
                 if (heightFull) {
-                    attributes.put("height-full", "true");
+                    attributes.put("height-full", "");
                 } else if (heightAuto) {
-                    attributes.put("height-auto", "true");
+                    attributes.put("height-auto", "");
                 } else {
-                    String heightString = DesignAttributeHandler
-                            .formatFloat(getHeight())
-                            + getHeightUnits().getSymbol();
+                    String heightString = DesignAttributeHandler.getFormatter()
+                            .format(getHeight()) + getHeightUnits().getSymbol();
                     attributes.put("height", heightString);
                 }
             }
@@ -1235,8 +1276,8 @@ public abstract class AbstractComponent extends AbstractClientConnector
 
     private static final String[] customAttributes = new String[] { "width",
             "height", "debug-id", "error", "width-auto", "height-auto",
-            "width-full", "height-full", "size-auto", "size-full",
-            "responsive", "immediate", "locale", "read-only", "_id" };
+            "width-full", "height-full", "size-auto", "size-full", "immediate",
+            "locale", "read-only", "_id" };
 
     /*
      * (non-Javadoc)
@@ -1246,8 +1287,6 @@ public abstract class AbstractComponent extends AbstractClientConnector
      */
     @Override
     public void writeDesign(Element design, DesignContext designContext) {
-        // clear element contents
-        DesignAttributeHandler.clearElement(design);
         AbstractComponent def = designContext.getDefaultInstance(this);
         Attributes attr = design.attributes();
         // handle default attributes
@@ -1282,10 +1321,6 @@ public abstract class AbstractComponent extends AbstractClientConnector
                     ((Focusable) def).getTabIndex(), Integer.class);
         }
 
-        // handle responsive
-        if (isResponsive()) {
-            attr.put("responsive", "");
-        }
     }
 
     /*

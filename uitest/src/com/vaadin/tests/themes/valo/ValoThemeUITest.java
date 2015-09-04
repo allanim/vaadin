@@ -85,7 +85,7 @@ public class ValoThemeUITest extends MultiBrowserTest {
     public void checkboxes() throws Exception {
         openTestURL("test");
         open("Check Boxes & Option Groups", "Check Boxes");
-        compareScreen("checkboxes_with_disabled");
+        compareScreen("checkboxes_with_readonly");
     }
 
     @Test
@@ -203,13 +203,7 @@ public class ValoThemeUITest extends MultiBrowserTest {
      * workaround for http://dev.vaadin.com/ticket/13763
      */
     private void check(String caption) {
-        WebElement cb = $(CheckBoxElement.class).caption(caption).first()
-                .findElement(By.xpath("input"));
-        if (BrowserUtil.isChrome(getDesiredCapabilities())) {
-            testBenchElement(cb).click(0, 0);
-        } else {
-            cb.click();
-        }
+        click($(CheckBoxElement.class).caption(caption).first());
     }
 
     @Test
